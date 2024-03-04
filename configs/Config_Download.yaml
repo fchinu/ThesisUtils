@@ -1,0 +1,15 @@
+download:
+  input: "input_download.txt"
+  output: "output_download.txt"
+
+merge:
+  input: null  # If not specified, it uses the download output
+  output: "Train/output_train" # Directory + prefix
+  max_files: 1
+
+convert_to_parquet:
+  input: null  # If not specified, it uses the merge output
+  output: "Train/output_parquet.parquet"
+  treename: "O2hfcanddslite"
+  nThreads: 3
+  selections: null
