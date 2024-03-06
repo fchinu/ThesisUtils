@@ -76,9 +76,9 @@ def convert_aod_to_parquet(input_filename, output_filename, treename, nThreads =
     TreeName = [TreeName] * len(DirNames)
     InputFile.Close()
 
-    if os.path.exists(output_filename + ".parquet"):
+    if os.path.exists(output_filename):
         print("File already exists. Removing it...")
-        os.remove(output_filename + ".parquet")
+        os.remove(output_filename)
 
     inputs = [f'{inFile}:{inDir}/{inTree}' for (inFile, inDir, inTree) in zip(FileName, DirNames, TreeName)]
     executor = ThreadPoolExecutor(nThreads)
@@ -87,15 +87,18 @@ def convert_aod_to_parquet(input_filename, output_filename, treename, nThreads =
     for data in iterator:
         if selections:
             data = data.query(selections)
-        if os.path.exists(output_filename + ".parquet"):
-            data.to_parquet(output_filename + ".parquet", engine='fastparquet', append=True)
+        if os.path.exists(output_filename):
+            data.to_parquet(output_filename, engine='fastparquet', append=True)
         else:
-            data.to_parquet(output_filename + ".parquet", engine='fastparquet')
+            data.to_parquet(output_filename, engine='fastparquet')
     del data, iterator, executor
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Create list of files from grid and merge files.')
     parser.add_argument('-c', '--config', type=str, help='Path to the YAML configuration file', required=True)
+    parser.add_argument('--aod', action='store_true', help='Run only the AOD download and merge')
+    parser.add_argument('--analysis', action='store_true', help='Run only the analysis results download and merge')
+    parser.add_argument('--parquet', action='store_true', help='Run only the conversion to Parquet')
     args = parser.parse_args()
 
     with open(args.config, 'r') as file:
@@ -108,14 +111,21 @@ if __name__ == "__main__":
 
     nFiles = download_filenames_from_grid(grid, config['download']['input'], config['download']['output'])
 
-    if config['merge']['input'] is None:
-        config['merge']['input'] = config['download']['output']
-    if config['convert_to_parquet']['input'] is None:
-        config['convert_to_parquet']['input'] = config['merge']['output']
+    if args.analysis:
+        download_analysis_results(config['merge']['input'], config['merge']['output'], config['merge']['max_files'])
+    elif args.aod:
+        download_aod(config['merge']['input'], config['merge']['output'], config['merge']['max_files'])
+    elif args.parquet:
+        convert_aod_to_parquet(config['convert_to_parquet']['input'] + '_AO2D.root', config['convert_to_parquet']['output'], config['convert_to_parquet']['treename'], config['convert_to_parquet']['nThreads'], config['convert_to_parquet']['selections'])
+    else:
+        if config['merge']['input'] is None:
+            config['merge']['input'] = config['download']['output']
+        if config['convert_to_parquet']['input'] is None:
+            config['convert_to_parquet']['input'] = config['merge']['output']
 
-    print(f"{min(nFiles, config['merge']['max_files'])} files contained in the {config['merge']['input']} will be merged. Press enter to continue.")
-    input()
+        print(f"{min(nFiles, config['merge']['max_files'])} files contained in the {config['merge']['input']} will be merged. Press enter to continue.")
+        input()
 
-    #download_analysis_results(config['merge']['input'], config['merge']['output'], config['merge']['max_files'])
-    #download_aod(config['merge']['input'], config['merge']['output'], config['merge']['max_files'])
-    convert_aod_to_parquet(config['convert_to_parquet']['input'] + '_AO2D.root', config['convert_to_parquet']['output'], config['convert_to_parquet']['treename'], config['convert_to_parquet']['nThreads'], config['convert_to_parquet']['selections'])
+        download_analysis_results(config['merge']['input'], config['merge']['output'], config['merge']['max_files'])
+        download_aod(config['merge']['input'], config['merge']['output'], config['merge']['max_files'])
+        convert_aod_to_parquet(config['convert_to_parquet']['input'] + '_AO2D.root', config['convert_to_parquet']['output'], config['convert_to_parquet']['treename'], config['convert_to_parquet']['nThreads'], config['convert_to_parquet']['selections'])
