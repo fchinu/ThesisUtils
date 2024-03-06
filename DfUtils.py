@@ -1,16 +1,17 @@
 import pandas as pd
 import pyarrow.parquet as pq
 
-def read_parquet_in_batches(file_path, selections, batch_size=1000000):
+def read_parquet_in_batches(file_path, selections = None, batch_size = 1000000):
     parquet_file = pq.ParquetFile(file_path)
     df = []
     for batch in parquet_file.iter_batches(batch_size):
         batch_df = batch.to_pandas()
-        batch_df = batch_df.query(selections)
+        if selections is not None:
+            batch_df = batch_df.query(selections)
         df.append(batch_df)
     return pd.concat(df)
 
-def apply_model_in_batches(ModelHandl, ColsToKeep, file_path, selections, batch_size=1000000):
+def apply_model_in_batches(ModelHandl, ColsToKeep, file_path, selections = None, batch_size = 1000000):
     parquet_file = pq.ParquetFile(file_path)
     df = []
     for batch in parquet_file.iter_batches(batch_size):
