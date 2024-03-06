@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
         # Apply cuts concurrently
         start_time = time.time()
-        with concurrent.futures.ThreadPoolExecutor(max_workers=9) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=config["nThreads"]) as executor:
             for cutidx, cut in enumerate(cuts):
                 futures.append(executor.submit(ApplySelection, df, cutsname, cut, cuts_limits, cutidx))
             

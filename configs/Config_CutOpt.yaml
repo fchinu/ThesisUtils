@@ -1,10 +1,12 @@
 outfilename: "outfile.root"
 infile: "infile.parquet"
+nThreads: 10
+
 PtBins:
   - [2, 3]
 cuts:
   - name: fCpa
-    min: [0.99, 0.998, 0.998, 0.98, 0.98]
-    max: [0.999, 0.9995, 0.9995, 0.995, 0.995]
+    min: [0.99]
+    max: [0.999]
     limit: lower
     Nsteps: 4
