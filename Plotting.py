@@ -107,6 +107,8 @@ def add_histogram(input_data):
         histogram.SetFillStyle(input_data['fill_style'])
     if input_data['fill_color']:
         histogram.SetFillColor(GetROOTColor(input_data['fill_color']))
+    if input_data['fill_alpha']:
+        histogram.SetFillColorAlpha(GetROOTColor(input_data['fill_color']), input_data['fill_alpha'])
     if input_data['normalize']:
         histogram.Scale(1.0 / histogram.Integral())
 
@@ -142,6 +144,8 @@ def main():
 
     canvas = create_canvas(config['canvas']['width'], config['canvas']['height'], config['canvas']['title'], config['canvas']['margin'])
     canvas.cd()
+    canvas.SetLogx(config['canvas']['axes']['x']['log_scale'])
+    canvas.SetLogy(config['canvas']['axes']['y']['log_scale'])
 
     frame = canvas.DrawFrame(
         config['canvas']['axes']['x']['range'][0],
@@ -159,9 +163,10 @@ def main():
     frame.GetXaxis().SetLabelOffset(config['canvas']['axes']['x']['labels']['offset'])
     frame.GetYaxis().SetLabelOffset(config['canvas']['axes']['y']['labels']['offset'])
 
+    histograms = []
     for input_data in config['input_data']:
-        histogram = add_histogram(input_data)
-        histogram.Draw(f"{input_data['draw_option']},same")
+        histograms.append(add_histogram(input_data))
+        histograms[-1].Draw(f"{input_data['draw_option']},same")
 
     for text in config.get('text', []):
         add_text(text['content'], text['x'], text['y'], text['size'], text['font'])
@@ -175,6 +180,7 @@ def main():
     if horizontal_line_config['draw']:
         draw_horizontal_line(horizontal_line_config['height'], horizontal_line_config['line_color'], horizontal_line_config['line_style'])
 
+    ROOT.gPad.RedrawAxis()
     canvas.SaveAs(config['output_file'])
 
 if __name__ == "__main__":

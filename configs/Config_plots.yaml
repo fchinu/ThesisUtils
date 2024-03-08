@@ -9,6 +9,7 @@ input_data:
     scale_factor: 1.0
     fill_style: 3145
     fill_color: 'kRed'
+    fill_alpha: 0.5
     normalize: true
     draw_option: 'hist'
   - file: '/path/to/file1.root'
@@ -19,6 +20,7 @@ input_data:
     scale_factor: 1.0
     fill_style: 3002
     fill_color: 'kGray+1'
+    fill_alpha: 0.5
     normalize: true
     draw_option: 'e'
 
@@ -41,6 +43,7 @@ canvas:
         size: 0.045
         offset: 0.01
       range: [0, 10]
+      log_scale: false
     y:
       title: 
         name: 'y-axis title'
@@ -50,6 +53,7 @@ canvas:
         size: 0.045
         offset: 0.01
       range: [0, 10]
+      log_scale: false
 
 text:
   - content: 'Hello, this is some LaTeX text!'
