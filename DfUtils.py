@@ -19,8 +19,8 @@ def apply_model_in_batches(ModelHandl, ColsToKeep, file_path, selections = None,
         batch_df = batch_df.query(selections)
         pred = ModelHandl.predict(batch_df, False)
         batch_df = batch_df.loc[:, ColsToKeep]
-        batch_df['ML_output_bkg'] = pred[:, 0]
-        batch_df['ML_output_prompt'] = pred[:, 1]
+        batch_df['ML_output_Bkg'] = pred[:, 0]
+        batch_df['ML_output_Prompt'] = pred[:, 1]
         batch_df['ML_output_FD'] = pred[:, 2]
         df.append(batch_df)
     return pd.concat(df)
