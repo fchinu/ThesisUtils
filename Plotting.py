@@ -87,6 +87,7 @@ def add_histogram(input_data):
         histogram = ROOT.TH1F(input_data['histogram'], "", 100, df[input_data['dataframe_column']].min(), df[input_data['dataframe_column']].max())
         for value in df[input_data['dataframe_column']]:
             histogram.Fill(value)
+        del df
     else:
         file = ROOT.TFile(input_data['file'])
         histogram = file.Get(input_data['histogram'])
