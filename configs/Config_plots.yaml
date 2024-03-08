@@ -1,14 +1,26 @@
 input_data:
   - file: '/path/to/file1.root'
     histogram: 'histogram1'
-    color: 'kBlue'
-    marker_style: 'kFullSquare'
-    marker_size: 1.5
-  - file: '/path/to/file2.root'
-    histogram: 'histogram2'
+    dataframe_column: 'fM'               # Draw the histogram of the column1 of the parquet file
+    selections: '2 < fPt < 4'
     color: 'kRed'
     marker_style: 'kOpenCircle'
     marker_size: 1.0
+    scale_factor: 1.0
+    fill_style: 3145
+    fill_color: 'kRed'
+    normalize: true
+    draw_option: 'hist'
+  - file: '/path/to/file1.root'
+    histogram: 'histogram1'
+    color: 'kBlue'
+    marker_style: 'kFullSquare'
+    marker_size: 1.5
+    scale_factor: 1.0
+    fill_style: 3002
+    fill_color: 'kGray+1'
+    normalize: true
+    draw_option: 'e'
 
 canvas:
   width: 800
@@ -21,27 +33,35 @@ canvas:
     bottom: 0.1
   axes:
     x:
-      label: 
-        name: 'x-axis label'
+      title: 
+        name: 'x-axis title'
         size: 0.05
-        offset: 0.5
+        offset: 1
+      labels:
+        size: 0.045
+        offset: 0.01
       range: [0, 10]
     y:
-      label: 
-        name: 'y-axis label'
+      title: 
+        name: 'y-axis title'
         size: 0.05
-        offset: 0.5
-      range: [0, 100]
+        offset: 1
+      labels:
+        size: 0.045
+        offset: 0.01
+      range: [0, 10]
 
 text:
   - content: 'Hello, this is some LaTeX text!'
     x: 0.2
     y: 0.6
     size: 0.07
+    font: 42
   - content: 'Hello, this is some other LaTeX text!'
     x: 0.2
     y: 0.4
     size: 0.04
+    font: 42
 
 legend:
   draw: true
@@ -49,6 +69,7 @@ legend:
   y1: 0.7
   x2: 0.9
   y2: 0.9
+  size: 0.05
   entries:
     - histogram: 'histogram1'
       label: 'Data 1'

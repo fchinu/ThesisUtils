@@ -1,6 +1,7 @@
 import ROOT
 import yaml
 import argparse
+from DfUtils import read_parquet_in_batches
 
 def GetROOTColor(color='kBlack'):
     '''
@@ -79,21 +80,34 @@ def create_canvas(width, height, title, margin):
     canvas.SetBottomMargin(margin['bottom'])
     return canvas
 
-def add_histogram(file_name, histogram_name, color, marker_style, marker_size, scale_factor):
-    file = ROOT.TFile(file_name)
-    histogram = file.Get(histogram_name)
-    histogram.SetDirectory(0)
-    file.Close()
+def add_histogram(input_data):
+    if 'parquet' in input_data['file']:
+        # Load data from Parquet file
+        df = read_parquet_in_batches(input_data['file'], input_data['selections'])
+        histogram = ROOT.TH1F(input_data['histogram'], "", 100, df[input_data['dataframe_column']].min(), df[input_data['dataframe_column']].max())
+        for value in df[input_data['dataframe_column']]:
+            histogram.Fill(value)
+    else:
+        file = ROOT.TFile(input_data['file'])
+        histogram = file.Get(input_data['histogram'])
+        histogram.SetDirectory(0)
+        file.Close()
 
-    if color:
-        histogram.SetLineColor(GetROOTColor(color))
-        histogram.SetMarkerColor(GetROOTColor(color))
-    if marker_style:
-        histogram.SetMarkerStyle(GetROOTMarker(marker_style))
-    if marker_size:
-        histogram.SetMarkerSize(marker_size)
-    if scale_factor:
-        histogram.Scale(scale_factor)
+    if input_data['color']:
+        histogram.SetLineColor(GetROOTColor(input_data['color']))
+        histogram.SetMarkerColor(GetROOTColor(input_data['color']))
+    if input_data['marker_style']:
+        histogram.SetMarkerStyle(GetROOTMarker(input_data['marker_style']))
+    if input_data['marker_size']:
+        histogram.SetMarkerSize(input_data['marker_size'])
+    if input_data['scale_factor']:
+        histogram.Scale(input_data['scale_factor'])
+    if input_data['fill_style']:
+        histogram.SetFillStyle(input_data['fill_style'])
+    if input_data['fill_color']:
+        histogram.SetFillColor(GetROOTColor(input_data['fill_color']))
+    if input_data['normalize']:
+        histogram.Scale(1.0 / histogram.Integral())
 
     return histogram
 
@@ -145,8 +159,8 @@ def main():
     frame.GetYaxis().SetLabelOffset(config['canvas']['axes']['y']['labels']['offset'])
 
     for input_data in config['input_data']:
-        histogram = add_histogram(input_data['file'], input_data['histogram'], input_data['color'], input_data['marker_style'], input_data['marker_size'], input_data['scale_factor'])
-        histogram.Draw("same")
+        histogram = add_histogram(input_data)
+        histogram.Draw(f"{input_data['draw_option']},same")
 
     for text in config.get('text', []):
         add_text(text['content'], text['x'], text['y'], text['size'], text['font'])
