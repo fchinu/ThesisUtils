@@ -1,0 +1,14 @@
+input_files: ["/home/fchinu/Run3/Ds_pp_13TeV/Datasets/Ds_pp_run3_ml/Train165702/Merged_LHC22b1b_Train165702_DsPrompt_Eff.parquet",
+              "/home/fchinu/Run3/Ds_pp_13TeV/Datasets/Ds_pp_run3_ml/Train165702/Merged_LHC22b1b_Train165702_DplusPrompt_Eff.parquet"]
+labels: ["Ds", "Dplus"]
+
+pt_bins:
+  mins: [2, 4, 6, 8, 12]
+  maxs: [4, 6, 8, 12, 24]
+preselections: [null, null, null, null, null]
+model_handlers: ["/home/fchinu/Run3/Ds_pp_13TeV/ML/Training/pt2_2.5/ModelHandler_pT_2_2.5.pickle",
+                  "/home/fchinu/Run3/Ds_pp_13TeV/ML/Training/pt2_2.5/ModelHandler_pT_2_2.5.pickle",
+                  "/home/fchinu/Run3/Ds_pp_13TeV/ML/Training/pt2_2.5/ModelHandler_pT_2_2.5.pickle",
+                  "/home/fchinu/Run3/Ds_pp_13TeV/ML/Training/pt2_2.5/ModelHandler_pT_2_2.5.pickle",
+                  "/home/fchinu/Run3/Ds_pp_13TeV/ML/Training/pt2_2.5/ModelHandler_pT_2_2.5.pickle"]
+output_file: "/home/fchinu/Run3/Ds_pp_13TeV/Efficiency/Efficiencies.root"
