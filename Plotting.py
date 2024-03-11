@@ -101,6 +101,8 @@ def add_histogram(input_data):
         histogram.SetMarkerStyle(GetROOTMarker(input_data['marker_style']))
     if input_data['marker_size']:
         histogram.SetMarkerSize(input_data['marker_size'])
+    if input_data['line_width']:
+        histogram.SetLineWidth(input_data['line_width'])
     if input_data['scale_factor']:
         histogram.Scale(input_data['scale_factor'])
     if input_data['fill_style']:

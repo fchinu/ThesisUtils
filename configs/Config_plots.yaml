@@ -6,6 +6,7 @@ input_data:
     color: 'kRed'
     marker_style: 'kOpenCircle'
     marker_size: 1.0
+    line_width: 1
     scale_factor: 1.0
     fill_style: 3145
     fill_color: 'kRed'
@@ -17,6 +18,7 @@ input_data:
     color: 'kBlue'
     marker_style: 'kFullSquare'
     marker_size: 1.5
+    line_width: 1
     scale_factor: 1.0
     fill_style: 3002
     fill_color: 'kGray+1'
