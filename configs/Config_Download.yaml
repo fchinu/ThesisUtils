@@ -13,3 +13,5 @@ convert_to_parquet:
   treename: "O2hfcanddslite"
   nThreads: 3
   selections: null
+  train_fraction: 0.8
+  isMC: false
