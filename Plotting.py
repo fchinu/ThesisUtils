@@ -91,7 +91,8 @@ def add_histogram(input_data):
     else:
         file = ROOT.TFile(input_data['file'])
         histogram = file.Get(input_data['histogram'])
-        histogram.SetDirectory(0)
+        if "TH" in histogram.ClassName():
+            histogram.SetDirectory(0)
         file.Close()
 
     if input_data['color']:
@@ -105,12 +106,12 @@ def add_histogram(input_data):
         histogram.SetLineWidth(input_data['line_width'])
     if input_data['scale_factor']:
         histogram.Scale(input_data['scale_factor'])
-    if input_data['fill_style']:
-        histogram.SetFillStyle(input_data['fill_style'])
     if input_data['fill_color']:
         histogram.SetFillColor(GetROOTColor(input_data['fill_color']))
     if input_data['fill_alpha']:
         histogram.SetFillColorAlpha(GetROOTColor(input_data['fill_color']), input_data['fill_alpha'])
+    if input_data['fill_style']:
+        histogram.SetFillStyle(input_data['fill_style'])
     if input_data['normalize']:
         histogram.Scale(1.0 / histogram.Integral())
 
@@ -170,8 +171,9 @@ def main():
         histograms.append(add_histogram(input_data))
         histograms[-1].Draw(f"{input_data['draw_option']},same")
 
-    for text in config.get('text', []):
-        add_text(text['content'], text['x'], text['y'], text['size'], text['font'])
+    if config.get('text', []):
+        for text in config.get('text', []):
+            add_text(text['content'], text['x'], text['y'], text['size'], text['font'])
 
     legend_config = config.get('legend')
     if legend_config['draw']:
