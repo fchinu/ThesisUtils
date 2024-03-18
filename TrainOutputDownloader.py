@@ -140,8 +140,8 @@ def convert_aod_to_parquet(input_filename, output_filename, treename, nThreads =
             df = pd.read_parquet(output_filename)
             suffixes = ["_Train.parquet", "_Eff.parquet"]
             split_and_dump_parquet(df, output_filename, suffixes, train_frac)
-        del df            
-        print("Splitting dataframe... Done!")
+            del df            
+            print("Splitting dataframe... Done!")
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Create list of files from grid and merge files.')
@@ -154,10 +154,6 @@ if __name__ == "__main__":
     with open(args.config, 'r') as file:
         config = yaml.safe_load(file)
 
-    grid = ROOT.TGrid.Connect("alien://")
-    if not grid:
-        print("No grid connection available. Exiting.")
-        exit(1)
 
     names_config = config['download']
     merge_config = config['merge']
@@ -165,28 +161,40 @@ if __name__ == "__main__":
 
 
     if args.analysis:
+        grid = ROOT.TGrid.Connect("alien://")
+        if not grid:
+            print("No grid connection available. Exiting.")
+            exit(1)
         nFiles = download_filenames_from_grid(grid, names_config['input'], names_config['output'])
         download_analysis_results(merge_config['input'], merge_config['output'], merge_config['max_files'])
     elif args.aod:
+        grid = ROOT.TGrid.Connect("alien://")
+        if not grid:
+            print("No grid connection available. Exiting.")
+            exit(1)
         nFiles = download_filenames_from_grid(grid, names_config['input'], names_config['output'])
         download_aod(merge_config['input'], merge_config['output'], merge_config['max_files'])
     elif args.parquet:
-        convert_aod_to_parquet(merge_config['output'] + '_AO2D.root', parquet_config['output'], \
+        convert_aod_to_parquet(parquet_config['input'], parquet_config['output'], \
                                 parquet_config['treename'], parquet_config['nThreads'], \
                                 parquet_config['selections'], parquet_config['train_fraction'], parquet_config['isMC'])
     else:
+        grid = ROOT.TGrid.Connect("alien://")
+        if not grid:
+            print("No grid connection available. Exiting.")
+            exit(1)
         nFiles = download_filenames_from_grid(grid, names_config['input'], names_config['output'])
         
         if merge_config['input'] is None:
             merge_config['input'] = names_config['output']
         if parquet_config['input'] is None:
-            parquet_config['input'] = merge_config['output']
+            parquet_config['input'] = merge_config['output'] + '_AO2D.root'
 
         print(f"{min(nFiles, merge_config['max_files'])} files contained in the {merge_config['input']} will be merged. Press enter to continue.")
         input()
 
         download_analysis_results(merge_config['input'], merge_config['output'], merge_config['max_files'])
         download_aod(merge_config['input'], merge_config['output'], merge_config['max_files'])
-        convert_aod_to_parquet(merge_config['output'] + '_AO2D.root', parquet_config['output'], \
+        convert_aod_to_parquet(parquet_config['input'], parquet_config['output'], \
                                 parquet_config['treename'], parquet_config['nThreads'], \
                                 parquet_config['selections'], parquet_config['train_fraction'], parquet_config['isMC'])
