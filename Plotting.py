@@ -96,8 +96,12 @@ def add_histogram(input_data):
         file.Close()
 
     if input_data['color']:
-        histogram.SetLineColor(GetROOTColor(input_data['color']))
-        histogram.SetMarkerColor(GetROOTColor(input_data['color']))
+        if isinstance(input_data['color'], str):
+            histogram.SetLineColor(GetROOTColor(input_data['color']))
+            histogram.SetMarkerColor(GetROOTColor(input_data['color']))
+        else:
+            histogram.SetLineColor(input_data['color'])
+            histogram.SetMarkerColor(input_data['color'])
     if input_data['marker_style']:
         histogram.SetMarkerStyle(GetROOTMarker(input_data['marker_style']))
     if input_data['marker_size']:
@@ -107,9 +111,14 @@ def add_histogram(input_data):
     if input_data['scale_factor']:
         histogram.Scale(input_data['scale_factor'])
     if input_data['fill_color']:
-        histogram.SetFillColor(GetROOTColor(input_data['fill_color']))
-    if input_data['fill_alpha']:
-        histogram.SetFillColorAlpha(GetROOTColor(input_data['fill_color']), input_data['fill_alpha'])
+        if isinstance(input_data['fill_color'], str):
+            histogram.SetFillColor(GetROOTColor(input_data['fill_color']))
+            if input_data['fill_alpha']:
+                histogram.SetFillColorAlpha(GetROOTColor(input_data['fill_color']), input_data['fill_alpha'])
+        else:
+            histogram.SetFillColor(input_data['fill_color'])
+            if input_data['fill_alpha']:
+                histogram.SetFillColorAlpha(input_data['fill_color'], input_data['fill_alpha'])
     if input_data['fill_style']:
         histogram.SetFillStyle(input_data['fill_style'])
     if input_data['normalize']:
