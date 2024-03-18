@@ -4,6 +4,8 @@ input_files:
   DsFD: path/to/DsFD.parquet
   DplusFD: path/to/DplusFD.parquet
 
+dataset_eff_frac: [0.2, 1, 0.2, 1]
+
 analysis_result_file_prompt: path/to/AnalysisResultsPrompt.root
 analysis_result_file_FD: path/to/AnalysisResultsFD.root
 

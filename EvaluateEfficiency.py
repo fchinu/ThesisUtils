@@ -34,6 +34,8 @@ if __name__ == "__main__":
     # Create output file
     output_file = TFile(config['output_file'], "recreate")
     histos = []
+    histosReco = []
+    histosBDT = []
 
     for idx, ParticleClass in enumerate(config['input_files']):
         if 'Ds' in ParticleClass:
@@ -46,6 +48,8 @@ if __name__ == "__main__":
             origin = 'FD'
         
         histos.append(TH1F(f"Eff_{particle}{origin}", f"Efficiency; #it{{p}}_{{T}} (GeV/c); Efficiency", len(ptedges)-1, np.asarray(ptedges, "d")))
+        histosReco.append(TH1F(f"RecoEff_{particle}{origin}", f"Reconstruction Efficiency; #it{{p}}_{{T}} (GeV/c); Efficiency", len(ptedges)-1, np.asarray(ptedges, "d")))
+        histosBDT.append(TH1F(f"BDTEff_{particle}{origin}", f"BDT Efficiency; #it{{p}}_{{T}} (GeV/c); Efficiency", len(ptedges)-1, np.asarray(ptedges, "d")))
 
 
     for iPt, (ptmin, ptmax) in enumerate(zip(config['pt_bins']['mins'], config['pt_bins']['maxs'])):
@@ -85,22 +89,36 @@ if __name__ == "__main__":
                 genParticles = hGenParticles.Integral(hGenParticles.FindBin(ptmin), hGenParticles.FindBin(ptmax)-1)  # right edge of the bin is not included
                 hRecoDs = analysisResult.Get(f"hf-task-ds/hPtRecSig{particle}Prompt")
                 recoParticles = hRecoDs.Integral(hRecoDs.FindBin(ptmin), hRecoDs.FindBin(ptmax)-1)  # right edge of the bin is not included
-                eff = len(df.query(selToApply))/len(df)*recoParticles/genParticles
-                unc = sqrt(eff * (1 - eff) / genParticles)
+                recoEff = recoParticles/genParticles
+                recoEffUnc = sqrt(recoEff * (1 - recoEff) / recoParticles)
+                BDTEff = len(df.query(selToApply))/len(df)
+                recoBDTUnc = sqrt(BDTEff * (1 - BDTEff) / len(df))
+                eff = BDTEff*recoEff
+                unc = sqrt(eff * (1 - eff) / genParticles / config['dataset_eff_frac'][idx]) # in case only part of the MC is used for efficiency calculation
             else:
                 analysisResult = TFile.Open(config['analysis_result_file_FD'])
                 hGenParticles = analysisResult.Get(f"hf-task-ds/hPtGen{particle}NonPrompt")                
                 genParticles = hGenParticles.Integral(hGenParticles.FindBin(ptmin), hGenParticles.FindBin(ptmax)-1)  # right edge of the bin is not included
                 hRecoDs = analysisResult.Get(f"hf-task-ds/hPtRecSig{particle}NonPrompt")
                 recoParticles = hRecoDs.Integral(hRecoDs.FindBin(ptmin), hRecoDs.FindBin(ptmax)-1)  # right edge of the bin is not included
-                eff = len(df.query(selToApply))/len(df)*recoParticles/genParticles
-                unc = sqrt(eff * (1 - eff) / genParticles)
+                recoEff = recoParticles/genParticles
+                recoEffUnc = sqrt(recoEff * (1 - recoEff) / recoParticles)
+                BDTEff = len(df.query(selToApply))/len(df)
+                recoBDTUnc = sqrt(BDTEff * (1 - BDTEff) / len(df))
+                eff = BDTEff*recoEff
+                unc = sqrt(eff * (1 - eff) / genParticles / config['dataset_eff_frac'][idx])
 
             histos[idx].SetBinContent(iPt+1, eff)
             histos[idx].SetBinError(iPt+1, unc)
+            histosReco[idx].SetBinContent(iPt+1, recoEff)
+            histosReco[idx].SetBinError(iPt+1, recoEffUnc)
+            histosBDT[idx].SetBinContent(iPt+1, BDTEff)
+            histosBDT[idx].SetBinError(iPt+1, recoBDTUnc)
         
 
     output_file.cd()
-    for histo in histos:
+    for histo, histoBDT, histoReco in zip(histos, histosBDT, histosReco):
         histo.Write()
+        histoBDT.Write()
+        histoReco.Write()
     output_file.Close()
