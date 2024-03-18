@@ -109,15 +109,19 @@ def convert_aod_to_parquet(input_filename, output_filename, treename, nThreads =
         if train_frac < 1:
             suffixes = ["_Train.parquet", "_Eff.parquet"]
             PromptDs = df.query('fOriginMcRec == 1 and fFlagMcDecayChanRec == 1')
+            PromptDs.to_parquet(output_filename.replace('.parquet', '_PromptDs.parquet'), engine='fastparquet')
             split_and_dump_parquet(PromptDs, output_filename.replace('.parquet', '_PromptDs'), suffixes, train_frac)
             del PromptDs
             NonPromptDs = df.query('fOriginMcRec == 2 and fFlagMcDecayChanRec == 1')
+            NonPromptDs.to_parquet(output_filename.replace('.parquet', '_NonPromptDs.parquet'), engine='fastparquet')
             split_and_dump_parquet(NonPromptDs, output_filename.replace('.parquet', '_NonPromptDs'), suffixes, train_frac)
             del NonPromptDs
             PromptDplus = df.query('fOriginMcRec == 1 and fFlagMcDecayChanRec == 3')
+            PromptDplus.to_parquet(output_filename.replace('.parquet', '_PromptDplus.parquet'), engine='fastparquet')
             split_and_dump_parquet(PromptDplus, output_filename.replace('.parquet', '_PromptDplus'), suffixes, train_frac)
             del PromptDplus
             NonPromptDplus = df.query('fOriginMcRec == 2 and fFlagMcDecayChanRec == 3')
+            NonPromptDplus.to_parquet(output_filename.replace('.parquet', '_NonPromptDplus.parquet'), engine='fastparquet')
             split_and_dump_parquet(NonPromptDplus, output_filename.replace('.parquet', '_NonPromptDplus'), suffixes, train_frac)
             del NonPromptDplus, df
         else:
