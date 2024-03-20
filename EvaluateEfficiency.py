@@ -17,6 +17,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Evaluate efficiencies for ML selection.')
     parser.add_argument('-c', '--config', type=str, help='Path to the YAML configuration file', required=True)
     parser.add_argument('-s', '--cuts', type=str, help='Path to the YAML cuts file', required=True)
+    parser.add_argument('-o', '--output', type=str, help='Path to the output file', required=True)
     args = parser.parse_args()
 
     # Load the YAML config file
@@ -32,7 +33,7 @@ if __name__ == "__main__":
     ptedges = ptmins + [ptmaxs[-1]]
     
     # Create output file
-    output_file = TFile(config['output_file'], "recreate")
+    output_file = TFile(args.output, "recreate")
     histos = []
     histosReco = []
     histosBDT = []

@@ -16,5 +16,3 @@ preselections: [null, null, null]
 model_handlers: [ path/to/ModelHandler_pT_1_2.pickle,
                   path/to/ModelHandler_pT_2_3.pickle,
                   path/to/ModelHandler_pT_3_4.pickle]
-
-output_file: "Efficiencies.root"
