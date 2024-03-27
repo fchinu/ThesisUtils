@@ -114,7 +114,7 @@ if __name__ == "__main__":
             histosReco[idx].SetBinContent(iPt+1, recoEff)
             histosReco[idx].SetBinError(iPt+1, recoEffUnc)
             histosBDT[idx].SetBinContent(iPt+1, BDTEff)
-            histosBDT[idx].SetBinError(iPt+1, recoBDTUnc)
+            histosBDT[idx].SetBinError(iPt+1, BDTEff)
         
 
     output_file.cd()
