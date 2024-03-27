@@ -169,20 +169,27 @@ if __name__ == "__main__":
         if not grid:
             print("No grid connection available. Exiting.")
             exit(1)
-        nFiles = download_filenames_from_grid(grid, names_config['input'], names_config['output'])
+
+        with open(names_config['output'], "r") as file:
+            nFiles = len(file.readlines())
+
         download_analysis_results(merge_config['input'], merge_config['output'], merge_config['max_files'])
-    elif args.aod:
+    if args.aod:
         grid = ROOT.TGrid.Connect("alien://")
         if not grid:
             print("No grid connection available. Exiting.")
             exit(1)
-        nFiles = download_filenames_from_grid(grid, names_config['input'], names_config['output'])
+
+        with open(names_config['output'], "r") as file:
+            nFiles = len(file.readlines())
+
         download_aod(merge_config['input'], merge_config['output'], merge_config['max_files'])
-    elif args.parquet:
+    if args.parquet:
         convert_aod_to_parquet(parquet_config['input'], parquet_config['output'], \
                                 parquet_config['treename'], parquet_config['nThreads'], \
                                 parquet_config['selections'], parquet_config['train_fraction'], parquet_config['isMC'])
-    else:
+
+    if not args.analysis and not args.aod and not args.parquet:
         grid = ROOT.TGrid.Connect("alien://")
         if not grid:
             print("No grid connection available. Exiting.")
