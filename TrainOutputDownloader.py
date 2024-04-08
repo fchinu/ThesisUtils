@@ -98,7 +98,7 @@ def convert_aod_to_parquet(input_filename, output_filename, treename, nThreads =
             data.to_parquet(output_filename, engine='fastparquet', append=True)
         else:
             data.to_parquet(output_filename, engine='fastparquet')
-    del data, iterator, executor
+    del iterator, executor
     print("Converting to parquet... Done!")
     
     if isMC:
