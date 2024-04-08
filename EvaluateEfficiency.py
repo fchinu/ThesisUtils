@@ -54,7 +54,6 @@ if __name__ == "__main__":
 
 
     for iPt, (ptmin, ptmax) in enumerate(zip(config['pt_bins']['mins'], config['pt_bins']['maxs'])):
-        print(f"Processing pT bin {ptmin} - {ptmax}")
         
         # Load the model and apply it to the data
         ModelHandl = ModelHandler()
@@ -62,6 +61,8 @@ if __name__ == "__main__":
         cols_to_keep = ["fM", "fPt"]
         
         for idx, ParticleClass in enumerate(config['input_files']):
+            print(f"Processing pT bin {ptmin} - {ptmax} for {ParticleClass}")
+
             preselection = f"and {config['preselections'][iPt]}" if config["preselections"][iPt] else ""
             
             # Load the data and apply preselection
@@ -94,7 +95,7 @@ if __name__ == "__main__":
                 recoEffUnc = sqrt(recoEff * (1 - recoEff) / recoParticles)
                 BDTEff = len(df.query(selToApply))/len(df)
                 recoBDTUnc = sqrt(BDTEff * (1 - BDTEff) / len(df))
-                eff = BDTEff*recoEff
+                eff = len(df.query(selToApply)) / genParticles / config['dataset_eff_frac'][idx]
                 unc = sqrt(eff * (1 - eff) / genParticles / config['dataset_eff_frac'][idx]) # in case only part of the MC is used for efficiency calculation
             else:
                 analysisResult = TFile.Open(config['analysis_result_file_FD'])
@@ -106,7 +107,7 @@ if __name__ == "__main__":
                 recoEffUnc = sqrt(recoEff * (1 - recoEff) / recoParticles)
                 BDTEff = len(df.query(selToApply))/len(df)
                 recoBDTUnc = sqrt(BDTEff * (1 - BDTEff) / len(df))
-                eff = BDTEff*recoEff
+                eff = len(df.query(selToApply)) / genParticles / config['dataset_eff_frac'][idx]
                 unc = sqrt(eff * (1 - eff) / genParticles / config['dataset_eff_frac'][idx])
 
             histos[idx].SetBinContent(iPt+1, eff)
