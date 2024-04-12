@@ -1,3 +1,5 @@
+isSlim: true
+
 download:
   input: "input_download.txt"
   output: "output_download.txt"

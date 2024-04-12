@@ -104,6 +104,9 @@ def convert_aod_to_parquet(input_filename, output_filename, treename, nThreads =
     if isMC:
         print("Splitting MC dataframe...", end="\r")
         df = pd.read_parquet(output_filename)
+        BkgDplus = df.query('abs(fFlagMcMatchRec) == 1')
+        BkgDplus.to_parquet(output_filename.replace('.parquet', '_BkgDplus.parquet'), engine='fastparquet')
+        del BkgDplus
         df = df.query('abs(fFlagMcMatchRec) == 4')                                      # Only matched candidates
         
         if train_frac < 1:
@@ -158,6 +161,10 @@ if __name__ == "__main__":
     with open(args.config, 'r') as file:
         config = yaml.safe_load(file)
 
+    if config["isSlim"]:
+        args.analysis = True
+        args.aod = True
+        args.parquet = True
 
     names_config = config['download']
     merge_config = config['merge']
