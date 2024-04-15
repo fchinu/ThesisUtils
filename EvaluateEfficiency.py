@@ -87,10 +87,17 @@ if __name__ == "__main__":
 
             if origin == 'Prompt':
                 analysisResult = TFile.Open(config['analysis_result_file_prompt'])
-                hGenParticles = analysisResult.Get(f"hf-task-ds/hPtGen{particle}Prompt")                
-                genParticles = hGenParticles.Integral(hGenParticles.FindBin(ptmin), hGenParticles.FindBin(ptmax)-1)  # right edge of the bin is not included
-                hRecoDs = analysisResult.Get(f"hf-task-ds/hPtRecSig{particle}Prompt")
-                recoParticles = hRecoDs.Integral(hRecoDs.FindBin(ptmin), hRecoDs.FindBin(ptmax)-1)  # right edge of the bin is not included
+                try:
+                    hGenParticles = analysisResult.Get(f"hf-task-ds/MC/{particle}/Prompt/hPtGen")                
+                    genParticles = hGenParticles.Integral(hGenParticles.FindBin(ptmin), hGenParticles.FindBin(ptmax)-1)  # right edge of the bin is not included
+                    hRecoDs = analysisResult.Get(f"hf-task-ds/MC/{particle}/Prompt/hPtRecSig")
+                    recoParticles = hRecoDs.Integral(hRecoDs.FindBin(ptmin), hRecoDs.FindBin(ptmax)-1)  # right edge of the bin is not included
+                except:
+                    hGenParticles = analysisResult.Get(f"hf-task-ds/hPtGen{particle}Prompt")                
+                    genParticles = hGenParticles.Integral(hGenParticles.FindBin(ptmin), hGenParticles.FindBin(ptmax)-1)  # right edge of the bin is not included
+                    hRecoDs = analysisResult.Get(f"hf-task-ds/hPtRecSig{particle}Prompt")
+                    recoParticles = hRecoDs.Integral(hRecoDs.FindBin(ptmin), hRecoDs.FindBin(ptmax)-1)  # right edge of the bin is not included
+
                 recoEff = recoParticles/genParticles
                 recoEffUnc = sqrt(recoEff * (1 - recoEff) / recoParticles)
                 BDTEff = len(df.query(selToApply))/len(df)
@@ -99,10 +106,17 @@ if __name__ == "__main__":
                 unc = sqrt(eff * (1 - eff) / genParticles / config['dataset_eff_frac'][idx]) # in case only part of the MC is used for efficiency calculation
             else:
                 analysisResult = TFile.Open(config['analysis_result_file_FD'])
-                hGenParticles = analysisResult.Get(f"hf-task-ds/hPtGen{particle}NonPrompt")                
-                genParticles = hGenParticles.Integral(hGenParticles.FindBin(ptmin), hGenParticles.FindBin(ptmax)-1)  # right edge of the bin is not included
-                hRecoDs = analysisResult.Get(f"hf-task-ds/hPtRecSig{particle}NonPrompt")
-                recoParticles = hRecoDs.Integral(hRecoDs.FindBin(ptmin), hRecoDs.FindBin(ptmax)-1)  # right edge of the bin is not included
+                try:
+                    hGenParticles = analysisResult.Get(f"hf-task-ds/MC/{particle}/NonPrompt/hPtGen")                
+                    genParticles = hGenParticles.Integral(hGenParticles.FindBin(ptmin), hGenParticles.FindBin(ptmax)-1)  # right edge of the bin is not included
+                    hRecoDs = analysisResult.Get(f"hf-task-ds/MC/{particle}/NonPrompt/hPtRecSig")
+                    recoParticles = hRecoDs.Integral(hRecoDs.FindBin(ptmin), hRecoDs.FindBin(ptmax)-1)  # right edge of the bin is not included
+                except:
+                    hGenParticles = analysisResult.Get(f"hf-task-ds/hPtGen{particle}NonPrompt")                
+                    genParticles = hGenParticles.Integral(hGenParticles.FindBin(ptmin), hGenParticles.FindBin(ptmax)-1)  # right edge of the bin is not included
+                    hRecoDs = analysisResult.Get(f"hf-task-ds/hPtRecSig{particle}NonPrompt")
+                    recoParticles = hRecoDs.Integral(hRecoDs.FindBin(ptmin), hRecoDs.FindBin(ptmax)-1)  # right edge of the bin is not included
+                    
                 recoEff = recoParticles/genParticles
                 recoEffUnc = sqrt(recoEff * (1 - recoEff) / recoParticles)
                 BDTEff = len(df.query(selToApply))/len(df)
@@ -115,7 +129,7 @@ if __name__ == "__main__":
             histosReco[idx].SetBinContent(iPt+1, recoEff)
             histosReco[idx].SetBinError(iPt+1, recoEffUnc)
             histosBDT[idx].SetBinContent(iPt+1, BDTEff)
-            histosBDT[idx].SetBinError(iPt+1, BDTEff)
+            histosBDT[idx].SetBinError(iPt+1, recoBDTUnc)
         
 
     output_file.cd()
