@@ -51,9 +51,6 @@ CorrectedDplusYields = DplusRawYields.Clone("hCorrectedDplusYields")
 CorrectedDplusYields.Divide(DplusEff)
 CorrectedDplusYields.Scale(1/2.69e-3)  #BR https://pdg.lbl.gov/2023/listings/rpp2023-list-D-plus-minus.pdf
 
-Ratio = CorrectedDsYields.Clone("hRatio")
-Ratio.SetTitle(";p_{T} (GeV/c);D_{s}^{+}/D^{+} Ratio")
-Ratio.Divide(CorrectedDplusYields)
 
 UncorrectedRatioEffFD = DsRawYields.Clone("hUncorrectedRatioForEfficiencyFD")
 UncorrectedRatioEffFD.SetTitle(";p_{T} (GeV/c);D_{s}^{+}/D^{+} Uncorrected ratio")
@@ -72,6 +69,7 @@ if DsFracFileName is not None and DplusFracFileName is not None:
         DsFracFile = TFile.Open(DsFracFileName)
         gDsFrac = DsFracFile.Get("gfraction")
         DsFracFile.Close()
+        gDsFrac.GetN()
         hDsFrac = ConvertGraphToHist(gDsFrac)
         CorrectedDsYields.Multiply(hDsFrac)
 
@@ -82,17 +80,21 @@ if DsFracFileName is not None and DplusFracFileName is not None:
         CorrectedDplusYields.Multiply(hDplusFrac)
     except:
         DsFracFile = TFile.Open(DsFracFileName)
-        hDsFrac = DsFracFile.Get("hCorrFracPrompt")
+        hDsFrac = DsFracFile.Get("hRawFracPrompt")
         hDsFrac.SetDirectory(0)
         DsFracFile.Close()
         CorrectedDsYields.Multiply(hDsFrac)
 
         DplusFracFile = TFile.Open(DplusFracFileName)
-        hDplusFrac = DplusFracFile.Get("hCorrFracPrompt")
-        hDsFrac.SetDirectory(0)
+        hDplusFrac = DplusFracFile.Get("hRawFracPrompt")
+        hDplusFrac.SetDirectory(0)
         DplusFracFile.Close()
         CorrectedDplusYields.Multiply(hDplusFrac)
 
+    PromptFracRatio = hDsFrac.Clone("hPromptFracRatio")
+    PromptFracRatio.SetTitle(";p_{T} (GeV/c);D_{s}^{+}/D^{+} Prompt fraction ratio")
+    PromptFracRatio.Divide(hDplusFrac)
+    
 
     UncorrectedRatioFD = DsRawYields.Clone("hUncorrectedRatioForEfficiency")
     UncorrectedRatioFD.SetTitle(";p_{T} (GeV/c);D_{s}^{+}/D^{+} Uncorrected ratio")
@@ -100,6 +102,10 @@ if DsFracFileName is not None and DplusFracFileName is not None:
     UncorrectedRatioFD.Multiply(hDsFrac)
     UncorrectedRatioFD.Divide(hDplusFrac)
     UncorrectedRatioFD.Scale(2.69e-3/2.21e-2)
+
+Ratio = CorrectedDsYields.Clone("hRatio")
+Ratio.SetTitle(";p_{T} (GeV/c);D_{s}^{+}/D^{+} Ratio")
+Ratio.Divide(CorrectedDplusYields)
 
 hEffRatio = DsEff.Clone("hEffRatio")
 hEffRatio.SetTitle(";p_{T} (GeV/c);D_{s}^{+}/D^{+} Efficiency ratio")
@@ -120,4 +126,5 @@ if DsFracFileName is not None and DplusFracFileName is not None:
     UncorrectedRatioFD.Write()
     hDsFrac.Write()
     hDplusFrac.Write()
+    PromptFracRatio.Write()
 outputFile.Close()
