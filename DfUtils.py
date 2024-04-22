@@ -70,3 +70,48 @@ def split_and_dump_parquet(df, output_filename, suffixes, train_frac=0.8):
     df_test.to_parquet(output_filename + suffixes[1], engine='fastparquet')
     del df, df_train, df_test
 
+def RebinTGraph(graph, bins):
+    x = np.array([graph.GetX()[i] for i in range(graph.GetN())])
+    y = np.array([graph.GetY()[i] for i in range(graph.GetN())])
+    exl = np.array([graph.GetEXlow()[i] for i in range(graph.GetN())])
+    exh = np.array([graph.GetEXhigh()[i] for i in range(graph.GetN())])
+    eyl = np.array([graph.GetEYlow()[i] for i in range(graph.GetN())])
+    eyh = np.array([graph.GetEYhigh()[i] for i in range(graph.GetN())])
+    xnew = []
+    ynew = []
+    exlnew = []
+    exhnew = []
+    eylnew = []
+    eyhnew = []
+    for idx, (a, b) in enumerate(zip(bins, bins[1:])):
+        xnew.append((a+b)/2)
+        ynew.append(np.sum([y[i] for i in range(len(x)) if x[i] >= a and x[i] < b]))
+        exlnew.append((b-a)/2)
+        exhnew.append((b-a)/2)
+        eylnew.append(sqrt(np.sum([eyl[i]**2 for i in range(len(x)) if x[i] >= a and x[i] < b])))
+        eyhnew.append(sqrt(np.sum([eyh[i]**2 for i in range(len(x)) if x[i] >= a and x[i] < b])))
+    return TGraphAsymmErrors(len(xnew), np.array(xnew), np.array(ynew), np.array(exlnew), np.array(exhnew), np.array(eylnew), np.array(eyhnew))
+
+def RebinHistoIntegral(histo, bins):
+    h = TH1D(histo.GetName(), histo.GetName(), len(bins)-1, np.asarray(bins, "d"))
+    for idx, (a, b) in enumerate(zip(bins, bins[1:])):
+        h.SetBinContent(idx+1, np.sum([histo.GetBinContent(i)*histo.GetBinWidth(i) for i in range(histo.FindBin(a), histo.FindBin(b))])/(b-a))
+        h.SetBinError(idx+1, sqrt(np.sum([histo.GetBinError(i)**2 for i in range(histo.FindBin(a), histo.FindBin(b))])))
+    return h
+
+def ConvertGraphToHist(graph):
+    n = graph.GetN()
+    x = graph.GetX()
+    xbins = np.zeros(n+1)
+    for i in range(n):
+        xbins[i] = x[i]-graph.GetEXlow()[i]
+    xbins[n] = x[n-1]+graph.GetEXlow()[n-1]
+    y = graph.GetY()
+    ex = graph.GetEXlow()
+    ey = graph.GetEYlow()
+
+    hist = TH1F(graph.GetName(), graph.GetTitle(), n, np.asarray(xbins, "d"))
+    for i in range(n):
+        hist.SetBinContent(i+1, y[i])
+        hist.SetBinError(i+1, ey[i])
+    return hist
