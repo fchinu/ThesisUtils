@@ -40,34 +40,59 @@ def fit(input_file, input_file_bkgtempl, output_dir, config, **kwargs):
     fixSigma = config["FixSigma"]
     fixSigmaFile = config["SigmaFile"]
     bkg_func = config["bkg_func"]
+    fixSigmaSecPeak = config["fixSigmaSecPeak"]
+    sigmaMultFactorSecPeak = config["SigmaMultFactorSecPeak"]
 
     data_hdl = DataHandler(data=input_file, var_name="fM",
                            histoname=f'hMass_{pt_min*10:.0f}_{pt_max*10:.0f}',
                            limits=[mass_min,mass_max], rebin=rebin)
-    data_corr_bkg = DataHandler(data=input_file_bkgtempl, var_name="fM",
-                                histoname=f'hDplusTemplate_{pt_min*10:.0f}_{pt_max*10:.0f}',
-                                limits=[mass_min,mass_max], rebin=rebin)
 
-    fitter = F2MassFitter(data_hdl, name_signal_pdf=["gaussian", "gaussian"],
-                          name_background_pdf=["hist", bkg_func],
-                          name=f"ds_pt{pt_min*10:.0f}_{pt_max*10:.0f}", chi2_loss=False,
-                          verbosity=1, tol=1.e-1)
+    if input_file_bkgtempl is None:
+        fitter = F2MassFitter(data_hdl, name_signal_pdf=["gaussian", "gaussian"],
+                            name_background_pdf=[bkg_func],
+                            name=f"ds_pt{pt_min*10:.0f}_{pt_max*10:.0f}", chi2_loss=False,
+                            verbosity=1, tol=1.e-1)
 
-    # bkg initialisation
-    if bkg_func == "expo":
-        fitter.set_background_initpar(1, "lam", -2)
-    elif bkg_func == "chebpol2":
-        fitter.set_background_initpar(1, "c0", 0.6)
-        fitter.set_background_initpar(1, "c1", -0.2)
-        fitter.set_background_initpar(1, "c2", 0.01)
-    elif bkg_func == "chebpol3":
-        fitter.set_background_initpar(1, "c0", 0.4)
-        fitter.set_background_initpar(1, "c1", -0.2)
-        fitter.set_background_initpar(1, "c2", -0.01)
-        fitter.set_background_initpar(1, "c3", 0.01)
+        # bkg initialisation
+        if bkg_func == "expo":
+            fitter.set_background_initpar(0, "lam", -2)
+        elif bkg_func == "chebpol2":
+            fitter.set_background_initpar(0, "c0", 0.6)
+            fitter.set_background_initpar(0, "c1", -0.2)
+            fitter.set_background_initpar(0, "c2", 0.01)
+        elif bkg_func == "chebpol3":
+            fitter.set_background_initpar(0, "c0", 0.4)
+            fitter.set_background_initpar(0, "c1", -0.2)
+            fitter.set_background_initpar(0, "c2", -0.01)
+            fitter.set_background_initpar(0, "c3", 0.01)
 
-    fitter.set_background_template(0, data_corr_bkg)
-    fitter.set_background_initpar(0, "frac", 0.01, limits=[0., 1.])
+
+    else:
+        data_corr_bkg = DataHandler(data=input_file_bkgtempl, var_name="fM",
+                                    histoname=f'hDplusTemplate_{pt_min*10:.0f}_{pt_max*10:.0f}',
+                                    limits=[mass_min,mass_max], rebin=rebin)
+        fitter = F2MassFitter(data_hdl, name_signal_pdf=["gaussian", "gaussian"],
+                            name_background_pdf=["hist", bkg_func],
+                            name=f"ds_pt{pt_min*10:.0f}_{pt_max*10:.0f}", chi2_loss=False,
+                            verbosity=1, tol=1.e-1)
+
+        # bkg initialisation
+        if bkg_func == "expo":
+            fitter.set_background_initpar(1, "lam", -2)
+        elif bkg_func == "chebpol2":
+            fitter.set_background_initpar(1, "c0", 0.6)
+            fitter.set_background_initpar(1, "c1", -0.2)
+            fitter.set_background_initpar(1, "c2", 0.01)
+        elif bkg_func == "chebpol3":
+            fitter.set_background_initpar(1, "c0", 0.4)
+            fitter.set_background_initpar(1, "c1", -0.2)
+            fitter.set_background_initpar(1, "c2", -0.01)
+            fitter.set_background_initpar(1, "c3", 0.01)
+
+        fitter.set_background_template(0, data_corr_bkg)
+        fitter.set_background_initpar(0, "frac", 0.01, limits=[0., 1.])
+
+
 
     # signals initialisation
     fitter.set_particle_mass(0, pdg_id=431, limits=[Particle.from_pdgid(431).mass*0.99e-3,
@@ -82,12 +107,24 @@ def fit(input_file, input_file_bkgtempl, output_dir, config, **kwargs):
 
     if fixSigma:
         print(fixSigmaFile)
-        sigmaFile = TFile.Open(fixSigmaFile)
-        sigmaHist = sigmaFile.Get(f'hRawYieldsSigma')
-        sigmaSecPeakHist = sigmaFile.Get(f'hRawYieldsSigmaSecondPeak')
-        fitter.set_signal_initpar(0, "sigma", sigmaHist.GetBinContent(sigmaHist.FindBin(pt_min)), fix=True)
-        fitter.set_signal_initpar(1, "sigma", sigmaSecPeakHist.GetBinContent(sigmaSecPeakHist.FindBin(pt_min)), fix=True)
-        sigmaFile.Close()
+        if fixSigmaFile:
+            sigmaFile = TFile.Open(fixSigmaFile)
+            sigmaHist = sigmaFile.Get(f'hRawYieldsSigma')
+            sigmaSecPeakHist = sigmaFile.Get(f'hRawYieldsSigmaSecondPeak')
+            fitter.set_signal_initpar(0, "sigma", sigmaHist.GetBinContent(sigmaHist.FindBin(pt_min)), fix=True)
+            fitter.set_signal_initpar(1, "sigma", sigmaSecPeakHist.GetBinContent(sigmaSecPeakHist.FindBin(pt_min)), fix=True)
+            sigmaFile.Close()
+        else:
+            print("ERROR: No sigma factor provided, please check your config file")
+            sys.exit()
+
+    if fixSigmaSecPeak:
+        if sigmaMultFactorSecPeak:
+            fit_result = fitter.mass_zfit() # First fit to get the sigma
+            fitter.set_signal_initpar(1, "sigma", fitter.get_sigma(0)[0]*sigmaMultFactorSecPeak, fix=True)
+        else:
+            print("ERROR: No sigma factor provided, please check your config file")
+            sys.exit()
         
     fit_result = fitter.mass_zfit()
 
@@ -103,8 +140,8 @@ def fit(input_file, input_file_bkgtempl, output_dir, config, **kwargs):
                                 axis_title=ax_title)
         figres = fitter.plot_raw_residuals(figsize=(8, 8), style="ATLAS",
                                         extra_info_loc=loc, axis_title=ax_title)
-        fig.savefig(f"{output_dir}/ds_mass_pt{pt_min:.1f}_{pt_max:.1f}.pdf")
-        figres.savefig(f"{output_dir}/ds_massres_pt{pt_min:.1f}_{pt_max:.1f}.pdf")
+        fig.savefig(f"{output_dir}/ds_mass_pt{pt_min:.1f}_{pt_max:.1f}.png")
+        figres.savefig(f"{output_dir}/ds_massres_pt{pt_min:.1f}_{pt_max:.1f}.png")
 
     return {"rawyields": [fitter.get_raw_yield(i) for i in range(2)],
             "sigma": [fitter.get_sigma(i) for i in range(2)],
@@ -138,6 +175,8 @@ massMins = fitConfig[cent]['MassMin']
 massMaxs = fitConfig[cent]['MassMax']
 fixSigma = fitConfig[cent]['FixSigma']
 fixSigmaFile = fitConfig[cent]['SigmaFile']
+FixSigmaSecPeak = fitConfig[cent]['FixSigmaSecPeak']
+SigmaMultFactorSecPeak = fitConfig[cent]["SigmaMultFactorSecPeak"]
 fixMean = fitConfig[cent]['FixMean']
 Rebins = fitConfig[cent]['Rebin']
 bkg_funcs = fitConfig[cent]['BkgFunc']
@@ -220,9 +259,9 @@ SetObjectStyle(hRelDiffRawYieldsSecPeakFitTrue, color=kRed, markerstyle=kFullSqu
 
 results = []
 with ProcessPoolExecutor(max_workers=30) as executor:
-    for idx, (ptmin, ptmax, massmin, massmax, rebin, bkg_func) in enumerate(zip(ptMins, ptMaxs, massMins, massMaxs, Rebins, bkg_funcs)):
+    for idx, (ptmin, ptmax, massmin, massmax, rebin, bkg_func, fixSigmaSecPeak) in enumerate(zip(ptMins, ptMaxs, massMins, massMaxs, Rebins, bkg_funcs, FixSigmaSecPeak)):
         config = {'mass_min': massmin, 'mass_max': massmax, 'pt_min': ptmin, 'pt_max': ptmax, 'rebin': rebin, \
-                  'FixSigma': fixSigma, 'SigmaFile': fixSigmaFile, 'bkg_func': bkg_func}
+                  'FixSigma': fixSigma, 'fixSigmaSecPeak': fixSigmaSecPeak, 'SigmaFile': fixSigmaFile, 'bkg_func': bkg_func, 'SigmaMultFactorSecPeak': SigmaMultFactorSecPeak}
         results.append((executor.submit(fit, args.inFileName, fitConfig[cent]['TemplateFile'],
             os.path.dirname(args.outFileName) + "/fits", config, save=args.save), idx))
 
