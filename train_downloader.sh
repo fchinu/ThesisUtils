@@ -42,7 +42,7 @@ jq -n --argjson train_run "$TRAIN_RUN" \
       --argjson is_slim "$IS_SLIM" \
       --argjson max_files_to_download "$MAX_FILES_TO_DOWNLOAD" \
       --arg suffix "$SUFFIX" \
-      --argjson selections "$SELECTIONS" \
+      --arg selections "$SELECTIONS" \
       --argjson train_fraction "$TRAIN_FRACTION" \
       --argjson isMC "$ISMC" \
       --argjson mc_selections "$selections_json" \

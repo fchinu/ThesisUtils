@@ -31,14 +31,14 @@ def split_dataset(df, config):
     output_filename_no_suffix = config["output_directory"] + "/" + \
         folder + f"/Train{config['train_run']}/{config['suffix']}"
 
-    for sel_name, selection in config["selections"].items():
+    for sel_name, selection in config["mc_selections"].items():
         df_sel = df.query(selection)
         df_sel.to_parquet(output_filename_no_suffix + f"_{sel_name}.parquet")
         if config["train_fraction"] < 1:
             df_train, df_eff = train_test_split(df_sel,
                 train_size=config["train_fraction"],random_state=42)
-            df_train.to_parquet(output_filename_no_suffix + f"/_{sel_name}_Train.parquet")
-            df_eff.to_parquet(output_filename_no_suffix + f"/_{sel_name}_Eff.parquet")
+            df_train.to_parquet(output_filename_no_suffix + f"_{sel_name}_Train.parquet")
+            df_eff.to_parquet(output_filename_no_suffix + f"_{sel_name}_Eff.parquet")
             del df_train, df_eff
         del df_sel
 
