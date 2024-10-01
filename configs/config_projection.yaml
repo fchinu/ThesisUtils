@@ -1,0 +1,27 @@
+inputs:
+  names: /home/fchinu/Run3/Ds_pp_13TeV/Datasets/Ds_pp_run3_ml/MC/Train264446/AnalysisResults_LHC24g5.root # string or list of strings
+  sparses: [
+    hf-task-ds/Data/hSparseMass,
+    hf-task-ds/MC/Ds/Prompt/hSparseMass,
+    hf-task-ds/MC/Ds/NonPrompt/hSparseMass,
+    hf-task-ds/MC/Dplus/Prompt/hSparseMass,
+    hf-task-ds/MC/Dplus/NonPrompt/hSparseMass,
+    hf-task-ds/MC/Dplus/Bkg/hSparseMass
+  ]
+  event_histogram: bc-selection-task/hCounterTVXafterBCcuts
+
+cut_set_file_name: /home/fchinu/Run3/Ds_pp_13TeV/Projections_RawYields/configs/cutset_pp13TeV_multiplicity.yml
+
+max_workers: 10
+
+output:
+  directory: /home/fchinu/Run3/Ds_pp_13TeV/Projections_RawYields/MC/VsMult
+  file_names: [
+    data.root,
+    ds_prompt.root,
+    ds_nonprompt.root,
+    dplus_prompt.root,
+    dplus_nonprompt.root,
+    dplus_bkg.root
+  ]
+

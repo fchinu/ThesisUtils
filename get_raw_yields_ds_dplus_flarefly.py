@@ -246,16 +246,16 @@ def load_inputs(cfg, cut_set):
     # load inv-mass histos
     h_mass = []
     with uproot.open(cfg["inputs"]["data"]) as f:
-        h_ev = f["hEv"]
+        h_ev = f["h_ev"]
 
         for pt_min, pt_max in zip(pt_mins, pt_maxs):
             if cent_mins is not None and cent_maxs is not None:
                 for cent_min, cent_max in zip(cent_mins, cent_maxs):
-                    suffix = f"{pt_min*10:.0f}_{pt_max*10:.0f}_Cent_{cent_min:.0f}_{cent_max:.0f}"
-                    h_mass.append(f[f'hMass_{suffix}'])
+                    suffix = f"{pt_min*10:.0f}_{pt_max*10:.0f}_cent_{cent_min:.0f}_{cent_max:.0f}"
+                    h_mass.append(f[f'h_mass_{suffix}'])
             else:
                 suffix = f"{pt_min*10:.0f}_{pt_max*10:.0f}"
-                h_mass.append(f[f'hMass_{suffix}'])
+                h_mass.append(f[f'h_mass_{suffix}'])
 
     return h_mass, h_ev
 
@@ -346,16 +346,16 @@ def get_sigma_from_cfg(cfg, fit_config, particle_name):
         pt_suffix = f"{fit_config['pt_min'] * 10:.0f}_{fit_config['pt_max'] * 10:.0f}"
         suffix = pt_suffix
         if "cent_min" in fit_config and "cent_max" in fit_config:
-            suffix += f"_Cent_{fit_config['cent_min']}_{fit_config['cent_max']}"
+            suffix += f"_cent_{fit_config['cent_min']}_{fit_config['cent_max']}"
             data_hdl_mc = DataHandler(
                 data=cfg["inputs"]["mc"][particle_name],
-                histoname=f"hMass_{suffix}",
+                histoname=f"h_mass_{suffix}",
                 limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
             )
         else:
             data_hdl_mc = DataHandler(
                 data=cfg["inputs"]["mc"][particle_name],
-                histoname=f"hMass_{suffix}",
+                histoname=f"h_mass_{suffix}",
                 limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
             )
         fitter_mc = F2MassFitter(
@@ -428,13 +428,13 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
 
         data_hdl = DataHandler(
             data=cfg["inputs"]["data"],
-            histoname=f'hMass_{pt_min*10:.0f}_{pt_max*10:.0f}_Cent_{cent_min:.0f}_{cent_max:.0f}',
+            histoname=f'h_mass_{pt_min*10:.0f}_{pt_max*10:.0f}_cent_{cent_min:.0f}_{cent_max:.0f}',
             limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
         )
     else:
         data_hdl = DataHandler(
             data=cfg["inputs"]["data"],
-            histoname=f'hMass_{pt_min*10:.0f}_{pt_max*10:.0f}',
+            histoname=f'h_mass_{pt_min*10:.0f}_{pt_max*10:.0f}',
             limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
         )
 
@@ -507,6 +507,8 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
         sigma_dplus_ratio = get_sigma_dplus_to_ds(cfg, fit_config, fitter)
         fitter.set_signal_initpar(1, "sigma", sigma_dplus_ratio, fix=True)
 
+
+    n_signal = len(fit_config["signal_func"])
     fit_result = fitter.mass_zfit()
     if fit_result.converged:
         if cfg["outputs"]["save_all_fits"]:
@@ -520,7 +522,8 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
             loc = ["lower left", "upper left"]
             ax_title = r"$M(\mathrm{KK\pi})$ GeV$/c^2$"
             fig, _ = fitter.plot_mass_fit(
-                style="ATLAS", show_extra_info=True,
+                style="ATLAS",
+                show_extra_info = (bkg_funcs != ["nobkg"]),
                 figsize=(8, 8), extra_info_loc=loc,
                 axis_title=ax_title
             )
@@ -530,7 +533,7 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
             )
             for frmt in cfg["outputs"]["formats"]:
                 if cent_min is not None and cent_max is not None:
-                    suffix = f"{pt_min * 10:.0f}_{pt_max * 10:.0f}_Cent_{cent_min:.0f}_{cent_max:.0f}"  # pylint: disable=line-too-long # noqa: E501
+                    suffix = f"{pt_min * 10:.0f}_{pt_max * 10:.0f}_cent_{cent_min:.0f}_{cent_max:.0f}"  # pylint: disable=line-too-long # noqa: E501
                     fig.savefig(f"{output_dir}/ds_mass_pt{suffix}.{frmt}")
                     figres.savefig(f"{output_dir}/ds_massres_pt{suffix}.{frmt}")
                     if frmt == "root":
@@ -547,20 +550,29 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
                             f"{output_dir}/fits.{frmt}",
                             option="update", suffix=suffix, num=5000
                         )
-
         out_dict = {
-            "raw_yields": [fitter.get_raw_yield(i) for i in range(2)],
-            "sigma": [fitter.get_sigma(i) for i in range(2)],
-            "mean": [fitter.get_mass(i) for i in range(2)],
+            "raw_yields": [fitter.get_raw_yield(i) for i in range(n_signal)],
+            "sigma": [fitter.get_sigma(i) for i in range(n_signal)],
+            "mean": [fitter.get_mass(i) for i in range(n_signal)],
             "chi2": float(fitter.get_chi2_ndf()),
-            "significance": [fitter.get_significance(i) for i in range(2)],
-            "signal": [fitter.get_signal(i) for i in range(2)],
-            "background": [fitter.get_background(i) for i in range(2)],
+            "significance": [fitter.get_significance(i) for i in range(n_signal)],
+            "signal": [fitter.get_signal(i) for i in range(n_signal)],
+            "background": [fitter.get_background(i) for i in range(n_signal)],
             "fracs": fitter._F2MassFitter__get_all_fracs(),  # pylint: disable=protected-access
             "converged": fit_result.converged
         }
     else:
-        out_dict = None
+        out_dict = {
+            "raw_yields": [None] * n_signal,
+            "sigma": [None] * n_signal,
+            "mean": [None] * n_signal,
+            "chi2": None,
+            "significance": [None] * n_signal,
+            "signal": [None] * n_signal,
+            "background": [None] * n_signal,
+            "fracs": None,
+            "converged": False
+        }
     return out_dict
 
 
