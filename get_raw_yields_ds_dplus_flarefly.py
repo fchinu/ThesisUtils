@@ -9,6 +9,7 @@ import itertools
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = ""  # pylint: disable=wrong-import-position
 from concurrent.futures import ProcessPoolExecutor  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
 import dataclasses  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -491,10 +492,10 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
 
     # signals initialisation
     fitter.set_particle_mass(0, pdg_id=431)
-    fitter.set_signal_initpar(0, "sigma", 0.008, limits=[0.001, 0.030])
+    fitter.set_signal_initpar(0, "sigma", 0.008, limits=[0., 0.1])
     fitter.set_signal_initpar(0, "frac", 0.1, limits=[0., 1.])
     fitter.set_particle_mass(1, pdg_id=411)
-    fitter.set_signal_initpar(1, "sigma", 0.006, limits=[0.001, 0.030])
+    fitter.set_signal_initpar(1, "sigma", 0.006, limits=[0., 0.1])
     fitter.set_signal_initpar(1, "frac", 0.1, limits=[0., 1.])
 
     if fit_config["fix_ds_sigma"]:
@@ -533,23 +534,20 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
             )
             for frmt in cfg["outputs"]["formats"]:
                 if cent_min is not None and cent_max is not None:
-                    suffix = f"{pt_min * 10:.0f}_{pt_max * 10:.0f}_cent_{cent_min:.0f}_{cent_max:.0f}"  # pylint: disable=line-too-long # noqa: E501
-                    fig.savefig(f"{output_dir}/ds_mass_pt{suffix}.{frmt}")
-                    figres.savefig(f"{output_dir}/ds_massres_pt{suffix}.{frmt}")
-                    if frmt == "root":
-                        fitter.dump_to_root(
-                            f"{output_dir}/fits.{frmt}", option="update", suffix=suffix,
-                            num=5000
-                        )
+                    suffix = f"_{pt_min * 10:.0f}_{pt_max * 10:.0f}_cent_{cent_min:.0f}_{cent_max:.0f}_"  # pylint: disable=line-too-long # noqa: E501
                 else:
-                    suffix = f"{pt_min * 10:.0f}_{pt_max * 10:.0f}"
-                    fig.savefig(f"{output_dir}/ds_mass_pt{suffix}.{frmt}")
-                    figres.savefig(f"{output_dir}/ds_massres_pt{suffix}.{frmt}")
-                    if frmt == "root":
-                        fitter.dump_to_root(
-                            f"{output_dir}/fits.{frmt}",
-                            option="update", suffix=suffix, num=5000
-                        )
+                    suffix = f"_{pt_min * 10:.0f}_{pt_max * 10:.0f}_"
+                suffix += cfg["outputs"]["suffix"]
+                fig.savefig(f"{output_dir}/ds_mass_pt{suffix}.{frmt}")
+                figres.savefig(f"{output_dir}/ds_massres_pt{suffix}.{frmt}")
+                if frmt == "root":
+                    fitter.dump_to_root(
+                        f"{output_dir}/fits_{cfg['outputs']['suffix']}.{frmt}", 
+                        option="update", suffix=suffix, num=5000
+                    )
+            plt.close(fig)
+            plt.close(figres)
+
         out_dict = {
             "raw_yields": [fitter.get_raw_yield(i) for i in range(n_signal)],
             "sigma": [fitter.get_sigma(i) for i in range(n_signal)],
