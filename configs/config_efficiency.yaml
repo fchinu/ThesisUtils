@@ -1,0 +1,17 @@
+inputs:
+  sparse:
+    file_name: '/home/fchinu/Run3/Ds_pp_13TeV/Efficiency/AnalysisResults_LHC24g5.root'
+    axis_pt_gen: 0
+    axis_npv_gen: 2
+    axis_pt_reco: 1
+    axis_npv_reco: 6
+  task_name: 'hf-task-ds' #['hf-task-ds', 'hf-task-ds-WithNPV']
+  cuts_file_name: '/home/fchinu/Run3/Ds_pp_13TeV/Projections_RawYields/configs/cutset_pp13TeV_multiplicity.yml'
+
+weights:
+  apply: True
+  file_name: '/home/fchinu/Run3/Ds_pp_13TeV/Efficiency/VsMult/weights_FT0M.root' # If use_splot is False, this file should contain the weights
+
+verbose: False
+output_dir: '/home/fchinu/Run3/Ds_pp_13TeV/Efficiency/VsMult'
+suffix: 'refactored_FT0M' #['FT0M', 'NTracksPV']
