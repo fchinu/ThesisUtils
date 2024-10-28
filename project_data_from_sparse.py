@@ -68,10 +68,10 @@ def get_cuts(cuts_config):
             Each dictionary contains 'min', 'max', and 'axis' keys.
             If centrality selections are provided, they are included in the cuts.
     """
-    if "Cent" in cuts_config["cutvars"]:
-        centrality_sels = cuts_config["cutvars"].pop("Cent")
+    if "cent" in cuts_config:
+        centrality_sels = cuts_config.pop("cent")
         centrality_sels = [{
-            'varname': 'Cent',
+            'varname': 'cent',
             'axis': centrality_sels["axisnum"],
             'min': min_cent,
             'max': max_cent
@@ -80,10 +80,10 @@ def get_cuts(cuts_config):
         centrality_sels = None
 
     # Extract variable names and cuts from the config
-    var_names = list(cuts_config['cutvars'].keys())
-    var_names.remove('InvMass')
+    var_names = list(cuts_config.keys())
+    var_names.remove('mass')
 
-    cuts_list = [cuts_config['cutvars'][var] for var in var_names]
+    cuts_list = [cuts_config[var] for var in var_names]
     axes = [cut['axisnum'] for cut in cuts_list]
     mins_list = [cut['min'] for cut in cuts_list]
     maxs_list = [cut['max'] for cut in cuts_list]
@@ -127,9 +127,9 @@ def project_sparse_worker(sparse, cut):
 
     for cut_var in cut:
         sparse.GetAxis(cut_var["axis"]).SetRangeUser(cut_var["min"], cut_var["max"])
-        if cut_var["varname"] == "Pt":
+        if cut_var["varname"] == "pt":
             pt_min, pt_max = cut_var["min"], cut_var["max"]
-        if cut_var["varname"] == "Cent":
+        if cut_var["varname"] == "cent":
             cent_min, cent_max = cut_var["min"], cut_var["max"]
 
     # Project the sparse data
@@ -165,8 +165,11 @@ def project_sparse(config_file_name):  # pylint: disable=too-many-locals
     h_ev = load_event_histogram_from_task(config["inputs"])
 
     cuts = get_cuts(cuts_config)
+    output_labels = config["output"]["file_names"]
+    if not isinstance(output_labels, list):
+        output_labels = [output_labels]
 
-    for sparse, output_label in zip(sparses, config["output"]["file_names"]):
+    for sparse, output_label in zip(sparses, output_labels):
         results = []
         with ProcessPoolExecutor() as executor:
             for cut in cuts:
