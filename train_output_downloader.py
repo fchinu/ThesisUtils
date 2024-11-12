@@ -94,7 +94,9 @@ def download_analysis_results(input_list_filename, config):
 
     for file_name in input_list_filename:
         count += 1
-        if count > config["max_files_to_download"]:
+        if count < config["start_file"]:
+            continue
+        if count > config["max_files_to_download"] + config["start_file"]:
             break
 
         file_path = file_name.strip() # Remove leading/trailing whitespaces
@@ -126,7 +128,9 @@ def download_aod(input_list_filename, config):
 
     for file_name in input_list_filename:
         count += 1
-        if count > config["max_files_to_download"]:
+        if count < config["start_file"]:
+            continue
+        if count > config["max_files_to_download"] + config["start_file"]:
             break
 
         file_path = file_name.strip() # Remove leading/trailing whitespaces
