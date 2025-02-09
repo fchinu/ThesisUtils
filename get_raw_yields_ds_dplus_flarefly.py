@@ -16,8 +16,10 @@ import pandas as pd  # noqa: E402
 import uproot  # noqa: E402
 import yaml  # noqa: E402
 import ROOT  # noqa: E402
+import zfit
 from flarefly.data_handler import DataHandler  # noqa: E402
 from flarefly.fitter import F2MassFitter  # noqa: E402
+from flarefly.utils import Logger  # noqa: E402
 # pylint: disable=no-member
 
 
@@ -73,22 +75,32 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
     """
 
     def __init__(self, pt_mins, pt_maxs, cent_mins=None, cent_maxs=None):
-        if cent_mins is None or cent_maxs is None:
+        if cent_mins is not None and cent_maxs is not None:
+            self._cent_info = BinsHelper(cent_mins, cent_maxs)
+        else:
             cent_mins, cent_maxs = None, None
+            self._cent_info = None
         self._pt_info = BinsHelper(pt_mins, pt_maxs)
-        self._cent_info = BinsHelper(cent_mins, cent_maxs)
         self._pt_axis_title = '#it{p}_{T} (GeV/#it{c})'
         self.obs_common = [
-            "raw_yields", "sigma", "mean", "raw_yield_over_ev",
-            "significance", "significance_over_sqrt_ev", "s_over_b", "signal", "background"
+            "raw_yields", "sigma", "sigma1", "sigma2", "frac1", "mean", "raw_yield_over_ev",
+            "significance", "significance_over_sqrt_ev", "s_over_b", "signal", "background",
+            "alphal", "alphar", "nl", "nr", "alpha", "n"
         ]
         self.axes_titles_common = [
-            "Raw yields", "Width (GeV/#it{c}^{2})", "Mean (GeV/#it{c}^{2})",
+            "Raw yields", "Width (GeV/#it{c}^{2})", "Width_{1} (GeV/#it{c}^{2})",
+            "Width_{2} (GeV/#it{c}^{2})", "Gaussian fraction", "Mean (GeV/#it{c}^{2})",
             "Raw yields / N_{ev}", "Significance (3#sigma)", "Significance / #sqrt{N_{ev}}",
-            "S/B (3#sigma)", "Signal (3#sigma)", "Background (3#sigma)"
+            "S/B (3#sigma)", "Signal (3#sigma)", "Background (3#sigma)", "#alpha_{l}",
+            "#alpha_{r}", "n_{l}", "n_{r}", "#alpha", "n"
         ]
-        self.obs_not_common = ["chi2", "sigma_ratio_second_first_peak"]
-        self.axes_titles_not_common = ["#chi^{2}/#it{ndf}", "Width second peak / width first peak"]
+        self.obs_not_common = [
+            "chi2", "sigma_ratio_second_first_peak", "corr_bkg_over_dplus_signal", "bkg_frac"
+        ]
+        self.axes_titles_not_common = [
+            "#chi^{2}/#it{ndf}", "Width second peak / width first peak",
+            "Corr. bkg / D^{+} signal", "Corr. bkg fraction"
+        ]
         self._n_ev = None
 
         self.__build_histos()
@@ -101,7 +113,7 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
         - obs (str): The observable for which the histogram is being created.
         - y_title (str): The title for the y-axis of the histogram.
         """
-        if self._cent_info.mins is None or self._cent_info.maxs is None:
+        if self._cent_info is None:
             self._histos[obs].append(ROOT.TH1D(
                 f'h_{obs}',
                 f';{self._pt_axis_title};{y_title}', self._pt_info.n_bins, self._pt_info.edges
@@ -162,17 +174,36 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
                 cent_max = None
                 i_cent = 0
             common_df_cols = [
-                "raw_yields", "sigma", "mean",
+                "raw_yields", "mean",
                 "significance", "signal", "background"
             ]
-            not_common_df_cols = ["chi2"]
+            if "sigma" in row:
+                common_df_cols.append("sigma")
+            else:
+                common_df_cols.append("sigma1")
+                common_df_cols.append("sigma2")
+                common_df_cols.append("frac1")
+            if "alphal" in row:
+                common_df_cols.append("alphal")
+                common_df_cols.append("alphar")
+                common_df_cols.append("nl")
+                common_df_cols.append("nr")
+            if "alpha" in row:
+                common_df_cols.append("alpha")
+                common_df_cols.append("n")
+                
+            not_common_df_cols = ["chi2", "corr_bkg_over_dplus_signal", "bkg_frac"]
             for obs in common_df_cols:
                 self._histos[f"{obs}_ds"][i_cent].SetBinContent(i_pt + 1, row[obs][0][0])
                 self._histos[f"{obs}_ds"][i_cent].SetBinError(i_pt + 1, row[obs][0][1])
                 self._histos[f"{obs}_dplus"][i_cent].SetBinContent(i_pt + 1, row[obs][1][0])
                 self._histos[f"{obs}_dplus"][i_cent].SetBinError(i_pt + 1, row[obs][1][1])
             for obs in not_common_df_cols:
-                self._histos[obs][i_cent].SetBinContent(i_pt + 1, row[obs])
+                if not isinstance(row[obs], tuple):
+                    self._histos[obs][i_cent].SetBinContent(i_pt + 1, row[obs])
+                else:
+                    self._histos[obs][i_cent].SetBinContent(i_pt + 1, row[obs][0])
+                    self._histos[obs][i_cent].SetBinError(i_pt + 1, row[obs][1])
             self._histos["raw_yield_over_ev_ds"][i_cent].SetBinContent(
                 i_pt + 1, row["raw_yields"][0][0] / self._n_ev
             )
@@ -209,9 +240,10 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
             self._histos["s_over_b_dplus"][i_cent].SetBinError(
                 i_pt + 1, row["signal"][1][1] / row["background"][1][0]
             )
-            self._histos["sigma_ratio_second_first_peak"][i_cent].SetBinContent(
-                i_pt + 1, row["sigma"][1][0] / row["sigma"][0][0]
-            )
+            if "sigma" in row:
+                self._histos["sigma_ratio_second_first_peak"][i_cent].SetBinContent(
+                    i_pt + 1, row["sigma"][1][0] / row["sigma"][0][0]
+                )
 
     def dump_to_root(self, output_file):
         """
@@ -220,7 +252,9 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
         Parameters:
         - output_file (str): Path to the output ROOT file.
         """
-        with ROOT.TFile(output_file, "RECREATE") as _:
+        with ROOT.TFile(output_file, "RECREATE") as outfile:
+            for key in self._histos:
+                outfile.mkdir(key)
             for histos in self._histos.values():
                 for hist in histos:
                     hist.Write()
@@ -239,10 +273,12 @@ def load_inputs(cfg, cut_set):
         - h_mass (list): List of invariant mass histograms.
         - h_ev (uproot.models.TH1): Event histogram.
     """
-    pt_mins = cut_set["Pt"]["min"]
-    pt_maxs = cut_set["Pt"]["max"]
-    cent_mins = cut_set["Cent"]["min"]
-    cent_maxs = cut_set["Cent"]["max"]
+    pt_mins = cut_set["pt"]["min"]
+    pt_maxs = cut_set["pt"]["max"]
+    cent_mins, cent_maxs = None, None
+    if "cent" in cut_set:
+        cent_mins = cut_set["cent"]["min"] 
+        cent_maxs = cut_set["cent"]["max"] 
 
     # load inv-mass histos
     h_mass = []
@@ -267,15 +303,15 @@ def create_fit_configs(cfg, cut_set):
 
     Args:
         cfg (dict): Configuration dictionary containing fit settings.
-        cut_set (dict): Dictionary containing cut sets for Pt and optionally Cent.
+        cut_set (dict): Dictionary containing cut sets for pt and optionally cent.
 
     Returns:
         - fit_configs (list): A list of dictionaries (one per bin of pt-centrality),
             each representing a fit configuration with keys:
             - "cent_min" (optional): Minimum centrality cut.
             - "cent_max" (optional): Maximum centrality cut.
-            - "pt_min": Minimum Pt cut.
-            - "pt_max": Maximum Pt cut.
+            - "pt_min": Minimum pt cut.
+            - "pt_max": Maximum pt cut.
             - "mass_min": Minimum mass cut.
             - "mass_max": Maximum mass cut.
             - "rebin": Rebin factor.
@@ -287,8 +323,8 @@ def create_fit_configs(cfg, cut_set):
             - "use_bkg_templ": Use background template.
     """
     fit_configs = [(idx, *cfgs) for idx, cfgs in enumerate(zip(
-        cut_set["Pt"]["min"],
-        cut_set["Pt"]["max"],
+        cut_set["pt"]["min"],
+        cut_set["pt"]["max"],
         cfg["fit_configs"]["mass"]["mins"],
         cfg["fit_configs"]["mass"]["maxs"],
         cfg["fit_configs"]["rebin"],
@@ -297,11 +333,15 @@ def create_fit_configs(cfg, cut_set):
         cfg["fit_configs"]["signal"]["fix_dplus_sigma"],
         cfg["fit_configs"]["signal"]["fix_sigma_dplus_to_ds"],
         cfg["fit_configs"]["bkg"]["bkg_funcs"],
-        cfg["fit_configs"]["bkg"]["use_bkg_templ"]
+        cfg["fit_configs"]["bkg"]["use_bkg_templ"],
+        *[sgn_func[par]["init"] for sgn_func in cfg["fit_configs"]["signal"]["par_init_limit"] for par in sgn_func],
+        *[sgn_func[par]["min"] for sgn_func in cfg["fit_configs"]["signal"]["par_init_limit"] for par in sgn_func],
+        *[sgn_func[par]["max"] for sgn_func in cfg["fit_configs"]["signal"]["par_init_limit"] for par in sgn_func],
+        *[sgn_func[par]["fix"] for sgn_func in cfg["fit_configs"]["signal"]["par_init_limit"] for par in sgn_func]
     ))]
-    if cut_set["Cent"]["min"] is not None and cut_set["Cent"]["max"] is not None:
+    if "cent" in cut_set:
         fit_configs = itertools.product(
-            [*zip(cut_set["Cent"]["min"], cut_set["Cent"]["max"])],
+            [*zip(cut_set["cent"]["min"], cut_set["cent"]["max"])],
             fit_configs
         )
         fit_configs = [(*cent, *config) for cent, config in fit_configs]
@@ -316,6 +356,12 @@ def create_fit_configs(cfg, cut_set):
             "rebin", "signal_func", "fix_ds_sigma", "fix_dplus_sigma", "fix_sigma_dplus_to_ds",
             "bkg_func", "use_bkg_templ"
         ]
+    config_keys += [
+        *[f"{par}_init_{i_func}" for i_func, sgn_func in enumerate(cfg["fit_configs"]["signal"]["par_init_limit"]) for par in sgn_func],
+        *[f"{par}_min_{i_func}" for i_func, sgn_func in enumerate(cfg["fit_configs"]["signal"]["par_init_limit"]) for par in sgn_func],
+        *[f"{par}_max_{i_func}" for i_func, sgn_func in enumerate(cfg["fit_configs"]["signal"]["par_init_limit"]) for par in sgn_func],
+        *[f"{par}_fix_{i_func}" for i_func, sgn_func in enumerate(cfg["fit_configs"]["signal"]["par_init_limit"]) for par in sgn_func]
+    ]
     fit_configs = [dict(zip(config_keys, config)) for config in fit_configs]
     return fit_configs
 
@@ -362,23 +408,110 @@ def get_sigma_from_cfg(cfg, fit_config, particle_name):
         fitter_mc = F2MassFitter(
             data_hdl_mc, name_signal_pdf=fit_config["signal_func"][idx_signal],
             name_background_pdf="nobkg",
-            name=f"{particle_name}_pt{pt_suffix}", chi2_loss=False,
+            name=f"{particle_name}_pt{pt_suffix}", chi2_loss=True,
             verbosity=1, tol=1.e-1
         )
         fitter_mc.set_particle_mass(0, pdg_id=431 if particle_name == "ds" else 411)
-        fitter_mc.set_signal_initpar(0, "sigma", 0.01, limits=[0.001, 0.050])
+        if fit_config["signal_func"][idx_signal] == "doublegaus":
+            fitter_mc.set_signal_initpar(0, "sigma1", 0.01, limits=[0.001, 0.050])
+            fitter_mc.set_signal_initpar(0, "sigma2", 0.02, limits=[0.001, 0.050])
+            fitter_mc.set_signal_initpar(0, "frac1", 0.02, limits=[0., 1.])
+        elif fit_config["signal_func"][idx_signal] == "gaussian":
+            fitter_mc.set_signal_initpar(0, "sigma", 0.01, limits=[0.001, 0.050])
+        elif fit_config["signal_func"][idx_signal] == "doublecb":
+            fitter_mc.set_signal_initpar(0, "sigma", 0.01, limits=[0.001, 0.050])
+            fitter_mc.set_signal_initpar(0, "alphal", 1.5, limits=[1., 3.])
+            fitter_mc.set_signal_initpar(0, "alphar", 1.5, limits=[1., 3.])
+            fitter_mc.set_signal_initpar(0, "nl", 50, limits=[30., 100.])
+            fitter_mc.set_signal_initpar(0, "nr", 50, limits=[30., 100.])
+        else:
+            Logger("Signal function not supported", "FATAL")
+        fitter_mc.mass_zfit()
 
-        return fitter_mc.get_sigma(0)[0]
+        if fit_config["signal_func"][idx_signal] == "doublegaus":
+            return (
+                fitter_mc.get_signal_parameter(0, "sigma1")[0],
+                fitter_mc.get_signal_parameter(0, "sigma2")[0],
+                fitter_mc.get_signal_parameter(0, "frac1")[0]
+            )
+        elif fit_config["signal_func"][idx_signal] == "gaussian":
+            return fitter_mc.get_sigma(0)[0]
+        elif fit_config["signal_func"][idx_signal] == "doublecb":
+            return (
+                fitter_mc.get_signal_parameter(0, "sigma")[0],
+                fitter_mc.get_signal_parameter(0, "alphar")[0],
+                fitter_mc.get_signal_parameter(0, "alphal")[0],
+                fitter_mc.get_signal_parameter(0, "nl")[0],
+                fitter_mc.get_signal_parameter(0, "nr")[0]
+            )
+
 
     if isinstance(cfg_sigma_fix, str):  # get from ROOT file
         with uproot.open(cfg_sigma_fix) as f:
             if "cent_min" in fit_config and "cent_max" in fit_config:
-                h_sigma = f[
-                    f'h_sigma_{particle_name}_{fit_config["cent_min"]}_{fit_config["cent_max"]}'
-                ]
-            else:
-                h_sigma = f[f'h_sigma_{particle_name}']
-            return h_sigma.values()[fit_config["i_pt"]]
+                if fit_config["signal_func"][idx_signal] == "doublegaus":
+                    h_sigma1 = f[
+                        f'h_sigma1_{particle_name}_{fit_config["cent_min"]}_{fit_config["cent_max"]}'
+                    ]
+                    h_sigma2 = f[
+                        f'h_sigma2_{particle_name}_{fit_config["cent_min"]}_{fit_config["cent_max"]}'
+                    ]
+                    h_frac1 = f[
+                        f'h_frac1_{particle_name}_{fit_config["cent_min"]}_{fit_config["cent_max"]}'
+                    ]
+                    return (
+                        h_sigma1.values()[fit_config["i_pt"]],
+                        h_sigma2.values()[fit_config["i_pt"]],
+                        h_frac1.values()[fit_config["i_pt"]]
+                    )
+                elif fit_config["signal_func"][idx_signal] == "doublecbsymm":
+                    h_sigma = f[f'h_sigma_{particle_name}_{fit_config["cent_min"]}_{fit_config["cent_max"]}']
+                    h_alpha = f[f'h_alpha_{particle_name}_{fit_config["cent_min"]}_{fit_config["cent_max"]}']
+                    h_n = f[f'h_n_{particle_name}_{fit_config["cent_min"]}_{fit_config["cent_max"]}']
+                    return (
+                        h_sigma.values()[fit_config["i_pt"]],
+                        h_alpha.values()[fit_config["i_pt"]],
+                        h_n.values()[fit_config["i_pt"]],
+                    )
+                else:
+                    h_sigma = f[
+                        f'h_sigma_{particle_name}_{fit_config["cent_min"]}_{fit_config["cent_max"]}'
+                    ]
+                    return h_sigma.values()[fit_config["i_pt"]]
+            if fit_config["signal_func"][idx_signal] == "doublegaus":
+                h_sigma1 = f[f'h_sigma1_{particle_name}_0_100']
+                h_sigma2 = f[f'h_sigma2_{particle_name}_0_100']
+                h_frac1 = f[f'h_frac1_{particle_name}_0_100']
+                return (
+                    h_sigma1.values()[fit_config["i_pt"]],
+                    h_sigma2.values()[fit_config["i_pt"]],
+                    h_frac1.values()[fit_config["i_pt"]]
+                )
+            elif fit_config["signal_func"][idx_signal] == "gaussian":
+                h_sigma = f[f'h_sigma_{particle_name}_0_100']
+                return h_sigma.values()[fit_config["i_pt"]]
+            elif fit_config["signal_func"][idx_signal] == "doublecb":
+                h_sigma = f[f'h_sigma_{particle_name}_0_100']
+                h_alphar = f[f'h_alphar_{particle_name}_0_100']
+                h_alphal = f[f'h_alphal_{particle_name}_0_100']
+                h_nl = f[f'h_nl_{particle_name}_0_100']
+                h_nr = f[f'h_nr_{particle_name}_0_100']
+                return (
+                    h_sigma.values()[fit_config["i_pt"]],
+                    h_alphar.values()[fit_config["i_pt"]],
+                    h_alphal.values()[fit_config["i_pt"]],
+                    h_nl.values()[fit_config["i_pt"]],
+                    h_nr.values()[fit_config["i_pt"]]
+                )
+            elif fit_config["signal_func"][idx_signal] == "doublecbsymm":
+                h_sigma = f[f'h_sigma_{particle_name}_0_100']
+                h_alpha= f[f'h_alpha_{particle_name}_0_100']
+                h_n = f[f'h_n_{particle_name}_0_100']
+                return (
+                    h_sigma.values()[fit_config["i_pt"]],
+                    h_alpha.values()[fit_config["i_pt"]],
+                    h_n.values()[fit_config["i_pt"]],
+                )
 
     if isinstance(cfg_sigma_fix, list):
         return cfg_sigma_fix[fit_config["i_pt"]]
@@ -418,11 +551,117 @@ def get_sigma_dplus_to_ds(cfg, fit_config, fitter):
     return sigma * cfg_sigma_ratio
 
 
+def initialise_signal(fitter, fit_config, idx):
+    """
+    Initialise the signal parameters for the fitter based on the provided configuration.
+
+    Parameters:
+    - fitter (object): The fitter object that will be used to set the signal parameters.
+    - fit_config (dict): A dictionary containing the configuration for the signal functions and their parameters.
+    - idx (int): The index of the signal function to be initialised.
+    """
+    if fit_config["signal_func"][idx] == "gaussian":
+        fitter.set_signal_initpar(
+            idx, "sigma", fit_config.get(f"sigma_init_{idx}", 0.01),
+            limits=[fit_config.get(f"sigma_min_{idx}", 0.001), fit_config.get(f"sigma_max_{idx}", 0.03)],
+            fix=fit_config.get(f"sigma_fix_{idx}", False)
+        )
+    elif fit_config["signal_func"][idx] == "doublegaus": # double gauss
+        fitter.set_signal_initpar(
+            idx, "sigma1", fit_config.get(f"sigma1_init_{idx}", 0.01),
+            limits=[fit_config.get(f"sigma1_min_{idx}", 0.001), fit_config.get(f"sigma1_max_{idx}", 0.03)],
+            fix=fit_config.get(f"sigma1_fix_{idx}", False)
+        )
+        fitter.set_signal_initpar(
+            idx, "sigma2", fit_config.get(f"sigma2_init_{idx}", 0.01),
+            limits=[fit_config.get(f"sigma2_min_{idx}", 0.001), fit_config.get(f"sigma2_max_{idx}", 0.03)],
+            fix=fit_config.get(f"sigma2_fix_{idx}", False)
+        )
+        fitter.set_signal_initpar(
+            idx, "frac1", fit_config.get(f"frac1_init_{idx}", 0.01),
+            limits=[fit_config.get(f"frac1_min_{idx}", 0.), fit_config.get(f"frac1_max_{idx}", 1.)],
+            fix=fit_config.get(f"frac1_fix_{idx}", False)
+        )
+    elif fit_config["signal_func"][idx] == "doublecb":
+        fitter.set_signal_initpar(
+            idx, "sigma", fit_config.get(f"sigma_init_{idx}", 0.01),
+            limits=[fit_config.get(f"sigma_min_{idx}", 0.001), fit_config.get(f"sigma_max_{idx}", 0.03)],
+            fix=fit_config.get(f"sigma_fix_{idx}", False)
+        )
+        fitter.set_signal_initpar(
+            idx, "alphar", fit_config.get(f"alphar_init_{idx}", 0.5),
+            limits=[fit_config.get(f"alphar_min_{idx}", 0.), fit_config.get(f"alphar_max_{idx}", 10.)],
+            fix=fit_config.get(f"alphar_fix_{idx}", False)
+        )
+        fitter.set_signal_initpar(
+            idx, "alphal", fit_config.get(f"alphal_init_{idx}", 0.5),
+            limits=[fit_config.get(f"alphal_min_{idx}", 0.), fit_config.get(f"alphal_max_{idx}", 10.)],
+            fix=fit_config.get(f"alphal_fix_{idx}", False)
+        )
+        fitter.set_signal_initpar(
+            idx, "nl", fit_config.get(f"nl_init_{idx}", 1.),
+            limits=[fit_config.get(f"nl_min_{idx}", 0.), fit_config.get(f"nl_max_{idx}", 10.)],
+            fix=fit_config.get(f"nl_fix_{idx}", False)
+        )
+        fitter.set_signal_initpar(
+            idx, "nr", fit_config.get(f"nr_init_{idx}", 1.),
+            limits=[fit_config.get(f"nr_min_{idx}", 0.), fit_config.get(f"nr_max_{idx}", 10.)],
+            fix=fit_config.get(f"nr_fix_{idx}", False)
+        )
+    elif fit_config["signal_func"][idx] == "doublecbsymm":
+        fitter.set_signal_initpar(
+            idx, "sigma", fit_config.get(f"sigma_init_{idx}", 0.01),
+            limits=[fit_config.get(f"sigma_min_{idx}", 0.001), fit_config.get(f"sigma_max_{idx}", 0.03)],
+            fix=fit_config.get(f"sigma_fix_{idx}", False)
+        )
+        fitter.set_signal_initpar(
+            idx, "alpha", fit_config.get(f"alpha_init_{idx}", 5.),
+            limits=[fit_config.get(f"alpha_min_{idx}", 0.5), fit_config.get(f"alpha_max_{idx}", 10.)],
+            fix=fit_config.get(f"alpha_fix_{idx}", False)
+        )
+        fitter.set_signal_initpar(
+            idx, "n", fit_config.get(f"n_init_{idx}", 10.),
+            limits=[fit_config.get(f"n_min_{idx}", 5.), fit_config.get(f"n_max_{idx}", 100.)],
+            fix=fit_config.get(f"n_fix_{idx}", False)
+        )
+    elif fit_config["signal_func"][idx] == "genergausexptailsymm":
+        fitter.set_signal_initpar(
+            idx, "sigma", fit_config.get(f"sigma_init_{idx}", 0.01),
+            limits=[fit_config.get(f"sigma_min_{idx}", 0.001), fit_config.get(f"sigma_max_{idx}", 0.03)],
+            fix=fit_config.get(f"sigma_fix_{idx}", False)
+        )
+        fitter.set_signal_initpar(
+            idx, "alpha", fit_config.get(f"alpha_init_{idx}", 3.),
+            limits=[fit_config.get(f"alpha_min_{idx}", 0.), fit_config.get(f"alpha_max_{idx}", 10.)],
+            fix=fit_config.get(f"alpha_fix_{idx}", False)
+        )
+    fitter.set_signal_initpar(idx, "frac", 0.1, limits=[0.0002, 1.])
+
+
+def fix_signal_parameters(fitter, fit_config, idx):
+    particle = "ds" if idx == 0 else "dplus"
+    if fit_config["signal_func"][idx] == "gaussian":
+        sigma_ds = get_sigma_from_cfg(cfg, fit_config, particle)
+        fitter.set_signal_initpar(idx, "sigma", sigma_ds, fix=True)
+    elif fit_config["signal_func"][idx] == "doublegaus":
+        sigma_ds = get_sigma_from_cfg(cfg, fit_config, particle)
+        fitter.set_signal_initpar(idx, "sigma1", sigma_ds[0], fix=True)
+        fitter.set_signal_initpar(idx, "sigma2", sigma_ds[1], fix=True)
+        fitter.set_signal_initpar(idx, "frac1", sigma_ds[2], fix=True)
+    elif fit_config["signal_func"][idx] == "doublecb":
+        sigma_ds = get_sigma_from_cfg(cfg, fit_config, particle)
+        fitter.set_signal_initpar(idx, "sigma", sigma_ds, fix=True)
+        fitter.set_signal_initpar(idx, "alphal", 1.5, limits=[1., 3.])
+        fitter.set_signal_initpar(idx, "alphar", 1.5, limits=[1., 3.])
+        fitter.set_signal_initpar(idx, "nl", 50, limits=[30., 100.])
+        fitter.set_signal_initpar(idx, "nr", 50, limits=[30., 100.])
+
 def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements # noqa: E501
     """Fit the invariant mass spectrum for a given configuration."""
     pt_min = fit_config["pt_min"]
     pt_max = fit_config["pt_max"]
 
+    cent_min, cent_max = None, None
     if "cent_min" in fit_config and "cent_max" in fit_config:
         cent_min = fit_config["cent_min"]
         cent_max = fit_config["cent_max"]
@@ -452,29 +691,72 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
 
         data_corr_bkg = DataHandler(
             data=cfg["fit_configs"]["bkg"]["template_file"],
-            histoname=f'hDplusTemplate_{pt_min*10:.0f}_{pt_max*10:.0f}',
+            histoname=cfg["fit_configs"]["bkg"]["hist_name"].format(
+                pt_min=f"{pt_min*10:.0f}", pt_max=f"{pt_max*10:.0f}",
+                cent_min=cent_min, cent_max=cent_max
+            ),
             limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
         )
         fitter = F2MassFitter(
             data_hdl, name_signal_pdf=fit_config["signal_func"],
             name_background_pdf=bkg_funcs,
-            name=f"ds_pt{pt_min*10:.0f}_{pt_max*10:.0f}", chi2_loss=False,
+            name=f"ds_pt{pt_min*10:.0f}_{pt_max*10:.0f}", chi2_loss=True,
             label_signal_pdf=label_signal_pdfs,
             label_bkg_pdf=label_bkg_pdfs,
             verbosity=1, tol=1.e-1
         )
         fitter.set_background_template(0, data_corr_bkg)
         fitter.set_background_initpar(0, "frac", 0.01, limits=[0., 1.])
-
+        templ_norm_cfg = cfg["fit_configs"]["bkg"]["templ_norm"]
+        if templ_norm_cfg["fix_with_br"][fit_config['i_pt']]:
+            data_corr_bkg_reference = DataHandler(
+                data=templ_norm_cfg["reference_file_bkg"],
+                histoname=templ_norm_cfg["reference_hist_name"].format(
+                    pt_min=f"{pt_min*10:.0f}", pt_max=f"{pt_max*10:.0f}",
+                    cent_min=cent_min, cent_max=cent_max
+                ),
+                limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
+            )
+            data_signal_reference = DataHandler(
+                data=templ_norm_cfg["reference_file_signal"],
+                histoname=templ_norm_cfg["reference_hist_name"].format(
+                    pt_min=f"{pt_min*10:.0f}", pt_max=f"{pt_max*10:.0f}",
+                    cent_min=cent_min, cent_max=cent_max
+                ),
+                limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
+            )
+            fitter.fix_bkg_frac_to_signal_pdf(
+                0, 1, # correlated bkg to D+ signal
+                data_corr_bkg_reference.get_norm() * templ_norm_cfg["br_dplus_to_pikpi"]["pdg"] / (
+                    templ_norm_cfg["br_dplus_to_pikpi"]["simulations"] +\
+                        templ_norm_cfg["br_dplus_to_k0*pi"]["simulations"]
+                ) / (
+                    data_signal_reference.get_norm() *\
+                        templ_norm_cfg["br_dplus_to_phipi"]["pdg"] /\
+                            templ_norm_cfg["br_dplus_to_phipi"]["simulations"]
+                )
+            )
+        elif "dplus_frac_factor" in fit_config:
+            fitter.fix_bkg_frac_to_signal_pdf(
+                0, 1, # correlated bkg to D+ signal
+                fit_config["dplus_frac_factor"]
+            )
     else:
         fitter = F2MassFitter(
             data_hdl, name_signal_pdf=fit_config["signal_func"],
             name_background_pdf=fit_config["bkg_func"],
-            name=f"ds_pt{pt_min*10:.0f}_{pt_max*10:.0f}", chi2_loss=False,
+            name=f"ds_pt{pt_min*10:.0f}_{pt_max*10:.0f}", chi2_loss=True,
             label_signal_pdf=label_signal_pdfs,
             label_bkg_pdf=label_bkg_pdfs,
             verbosity=1, tol=1.e-1
         )
+
+    # signals initialisation
+    fitter.set_particle_mass(0, pdg_id=431)
+    fitter.set_particle_mass(1, pdg_id=411)
+
+    initialise_signal(fitter, fit_config, 0)
+    initialise_signal(fitter, fit_config, 1)
 
     # bkg initialisation
     for i_func, bkg_func in enumerate(bkg_funcs):
@@ -490,75 +772,113 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
             fitter.set_background_initpar(i_func, "c2", -0.01)
             fitter.set_background_initpar(i_func, "c3", 0.01)
 
-    # signals initialisation
-    fitter.set_particle_mass(0, pdg_id=431)
-    fitter.set_signal_initpar(0, "sigma", 0.008, limits=[0., 0.1])
-    fitter.set_signal_initpar(0, "frac", 0.1, limits=[0., 1.])
-    fitter.set_particle_mass(1, pdg_id=411)
-    fitter.set_signal_initpar(1, "sigma", 0.006, limits=[0., 0.1])
-    fitter.set_signal_initpar(1, "frac", 0.1, limits=[0., 1.])
-
     if fit_config["fix_ds_sigma"]:
-        sigma_ds = get_sigma_from_cfg(cfg, fit_config, "ds")
-        fitter.set_signal_initpar(0, "sigma", sigma_ds, fix=True)
+        if fit_config["signal_func"][0] == "gaussian":
+            sigma_ds = get_sigma_from_cfg(cfg, fit_config, "ds")
+            fitter.set_signal_initpar(0, "sigma", sigma_ds, fix=True)
+        elif fit_config["signal_func"][0] == "doublegaus":
+            sigma_ds = get_sigma_from_cfg(cfg, fit_config, "ds")
+            fitter.set_signal_initpar(0, "sigma1", sigma_ds[0], fix=True)
+            fitter.set_signal_initpar(0, "sigma2", sigma_ds[1], fix=True)
+            fitter.set_signal_initpar(0, "frac1", sigma_ds[2], fix=True)
+        elif fit_config["signal_func"][0] == "doublecbsymm":
+            sigma_ds = get_sigma_from_cfg(cfg, fit_config, "ds")
+            fitter.set_signal_initpar(0, "sigma", sigma_ds[0], fix=True)
+            fitter.set_signal_initpar(0, "alpha", sigma_ds[1], fix=True)
+            fitter.set_signal_initpar(0, "n", sigma_ds[2], fix=True)
     if fit_config["fix_dplus_sigma"]:
-        sigma_dplus = get_sigma_from_cfg(cfg, fit_config, "dplus")
-        fitter.set_signal_initpar(1, "sigma", sigma_dplus, fix=True)
+        if fit_config["signal_func"][1] == "gaussian":
+            sigma_dplus = get_sigma_from_cfg(cfg, fit_config, "dplus")
+            fitter.set_signal_initpar(1, "sigma", sigma_dplus, fix=True)
+        elif fit_config["signal_func"][1] == "doublegaus":
+            sigma_dplus = get_sigma_from_cfg(cfg, fit_config, "dplus")
+            fitter.set_signal_initpar(1, "sigma1", sigma_dplus[0], fix=True)
+            fitter.set_signal_initpar(1, "sigma2", sigma_dplus[1], fix=True)
+            fitter.set_signal_initpar(1, "frac1", sigma_dplus[2], fix=True)
+        elif fit_config["signal_func"][1] == "doublecbsymm":
+            sigma_dplus = get_sigma_from_cfg(cfg, fit_config, "dplus")
+            fitter.set_signal_initpar(1, "sigma", sigma_dplus[0], fix=True)
+            fitter.set_signal_initpar(1, "alpha", sigma_dplus[1], fix=True)
+            fitter.set_signal_initpar(1, "n", sigma_dplus[2], fix=True)
     if fit_config["fix_sigma_dplus_to_ds"]:
         sigma_dplus_ratio = get_sigma_dplus_to_ds(cfg, fit_config, fitter)
         fitter.set_signal_initpar(1, "sigma", sigma_dplus_ratio, fix=True)
 
-
     n_signal = len(fit_config["signal_func"])
     fit_result = fitter.mass_zfit()
-    if fit_result.converged:
-        if cfg["outputs"]["save_all_fits"]:
-            output_dir = os.path.join(
-                os.path.expanduser(cfg["outputs"]["directory"]),
-                "fits"
-            )
-            if not os.path.exists(output_dir):
-                os.makedirs(output_dir)
+    #if fit_result.converged:
+    if cfg["outputs"]["save_all_fits"]:
+        output_dir = os.path.join(
+            os.path.expanduser(cfg["outputs"]["directory"]),
+            "fits"
+        )
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
-            loc = ["lower left", "upper left"]
-            ax_title = r"$M(\mathrm{KK\pi})$ GeV$/c^2$"
-            fig, _ = fitter.plot_mass_fit(
-                style="ATLAS",
-                show_extra_info = (bkg_funcs != ["nobkg"]),
-                figsize=(8, 8), extra_info_loc=loc,
-                axis_title=ax_title
-            )
-            figres = fitter.plot_raw_residuals(
-                figsize=(8, 8), style="ATLAS",
-                extra_info_loc=loc, axis_title=ax_title
-            )
-            for frmt in cfg["outputs"]["formats"]:
-                if cent_min is not None and cent_max is not None:
-                    suffix = f"_{pt_min * 10:.0f}_{pt_max * 10:.0f}_cent_{cent_min:.0f}_{cent_max:.0f}_"  # pylint: disable=line-too-long # noqa: E501
-                else:
-                    suffix = f"_{pt_min * 10:.0f}_{pt_max * 10:.0f}_"
-                suffix += cfg["outputs"]["suffix"]
-                fig.savefig(f"{output_dir}/ds_mass_pt{suffix}.{frmt}")
-                figres.savefig(f"{output_dir}/ds_massres_pt{suffix}.{frmt}")
-                if frmt == "root":
-                    fitter.dump_to_root(
-                        f"{output_dir}/fits_{cfg['outputs']['suffix']}.{frmt}", 
-                        option="update", suffix=suffix, num=5000
-                    )
-            plt.close(fig)
-            plt.close(figres)
+        loc = ["lower left", "upper left"]
+        ax_title = r"$M(\mathrm{KK\pi})$ GeV$/c^2$"
+        fig, _ = fitter.plot_mass_fit(
+            style="ATLAS",
+            show_extra_info = (bkg_funcs != ["nobkg"]),
+            figsize=(8, 8), extra_info_loc=loc,
+            legend_loc="upper right",
+            axis_title=ax_title
+        )
+        figres = fitter.plot_raw_residuals(
+            figsize=(8, 8), style="ATLAS",
+            extra_info_loc=loc, axis_title=ax_title
+        )
+        for frmt in cfg["outputs"]["formats"]:
+            if cent_min is not None and cent_max is not None:
+                suffix = f"_{pt_min * 10:.0f}_{pt_max * 10:.0f}_cent_{cent_min:.0f}_{cent_max:.0f}_"  # pylint: disable=line-too-long # noqa: E501
+            else:
+                suffix = f"_{pt_min * 10:.0f}_{pt_max * 10:.0f}_"
+            suffix += cfg["outputs"]["suffix"]
+            fig.savefig(f"{output_dir}/ds_mass_pt{suffix}.{frmt}")
+            figres.savefig(f"{output_dir}/ds_massres_pt{suffix}.{frmt}")
+            if frmt == "root":
+                fitter.dump_to_root(
+                    f"{output_dir}/fits_{cfg['outputs']['suffix']}.{frmt}", 
+                    option="update", suffix=suffix, num=5000
+                )
+        plt.close(fig)
+        plt.close(figres)
 
+        fracs = fitter._F2MassFitter__get_all_fracs() # pylint: disable=protected-access
+        corr_bkg_frac = fracs[1][0]
+        corr_bkg_frac_err = fracs[4][0]
         out_dict = {
             "raw_yields": [fitter.get_raw_yield(i) for i in range(n_signal)],
-            "sigma": [fitter.get_sigma(i) for i in range(n_signal)],
             "mean": [fitter.get_mass(i) for i in range(n_signal)],
             "chi2": float(fitter.get_chi2_ndf()),
-            "significance": [fitter.get_significance(i) for i in range(n_signal)],
-            "signal": [fitter.get_signal(i) for i in range(n_signal)],
-            "background": [fitter.get_background(i) for i in range(n_signal)],
-            "fracs": fitter._F2MassFitter__get_all_fracs(),  # pylint: disable=protected-access
-            "converged": fit_result.converged
+            "significance": [fitter.get_significance(i, min=1.8, max=2.2) for i in range(n_signal)],
+            "signal": [fitter.get_signal(i, min=1.8, max=2.) for i in range(n_signal)],
+            "background": [fitter.get_background(i, min=1.8, max=2.) for i in range(n_signal)],
+            "bkg_frac": (corr_bkg_frac, corr_bkg_frac_err),
+            "fracs": fracs,
+            "converged": fit_result.converged, 
+            "corr_bkg_over_dplus_signal": (fracs[1][0] / fracs[0][1], fracs[1][0] / fracs[0][1] * np.sqrt((fracs[4][0] / fracs[1][0])**2 + (fracs[3][1] / fracs[0][1])**2))
         }
+
+        if fit_config["signal_func"][0] == "doublegaus": #TODO: generalise in case different signal functions are used
+            out_dict["sigma1"] = [fitter.get_signal_parameter(i, "sigma1") for i in range(n_signal)]
+            out_dict["sigma2"] = [fitter.get_signal_parameter(i, "sigma2") for i in range(n_signal)]
+            out_dict["frac1"] = [fitter.get_signal_parameter(i, "frac1") for i in range(n_signal)]
+        elif fit_config["signal_func"][0] == "gaussian":
+            out_dict["sigma"] = [fitter.get_sigma(i) for i in range(n_signal)]
+        elif fit_config["signal_func"][0] == "doublecb":
+            out_dict["sigma"] = [fitter.get_signal_parameter(i, "sigma") for i in range(n_signal)]
+            out_dict["alphar"] = [fitter.get_signal_parameter(i, "alphar") for i in range(n_signal)]
+            out_dict["alphal"] = [fitter.get_signal_parameter(i, "alphal") for i in range(n_signal)]
+            out_dict["nl"] = [fitter.get_signal_parameter(i, "nl") for i in range(n_signal)]
+            out_dict["nr"] = [fitter.get_signal_parameter(i, "nr") for i in range(n_signal)]
+        elif fit_config["signal_func"][0] == "doublecbsymm":
+            out_dict["sigma"] = [fitter.get_signal_parameter(i, "sigma") for i in range(n_signal)]
+            out_dict["alpha"] = [fitter.get_signal_parameter(i, "alpha") for i in range(n_signal)]
+            out_dict["n"] = [fitter.get_signal_parameter(i, "n") for i in range(n_signal)]
+        elif fit_config["signal_func"][0] == "genergausexptailsymm":
+            out_dict["sigma"] = [fitter.get_signal_parameter(i, "sigma") for i in range(n_signal)]
+            out_dict["alpha"] = [fitter.get_signal_parameter(i, "alpha") for i in range(n_signal)]
     else:
         out_dict = {
             "raw_yields": [None] * n_signal,
@@ -588,20 +908,100 @@ def fit(config_file_name):
     # load cut set
     with open(cfg["inputs"]["cutset"], "r", encoding="utf-8") as f:
         cut_set = yaml.safe_load(f)
-    cut_set = cut_set["cutvars"]
+
+    zfit.run.set_cpus_explicit(
+        intra=cfg['zfit_cpus']['intra'],
+        inter=cfg['zfit_cpus']['inter']
+    )
 
     # load inputs
     _, h_ev = load_inputs(cfg, cut_set)
     n_ev = sum(h_ev.values())
 
+    cent_mins, cent_maxs = None, None
+    if "cent" in cut_set:
+        cent_mins = cut_set["cent"]["min"]
+        cent_maxs = cut_set["cent"]["max"]
+
     # create output handler
     h_handler = HistHandler(
-        cut_set["Pt"]["min"], cut_set["Pt"]["max"],
-        cut_set["Cent"]["min"], cut_set["Cent"]["max"]
+        cut_set["pt"]["min"], cut_set["pt"]["max"],
+        cent_mins, cent_maxs
     )
     h_handler.set_n_ev(n_ev)
 
     fit_configs = create_fit_configs(cfg, cut_set)
+
+    bkg_cfg = cfg["fit_configs"]["bkg"]
+    if (any(bkg_cfg["use_bkg_templ"]) and any(bkg_cfg["templ_norm"]["fix_to_mb"])) or\
+            any(cfg["fit_configs"]["signal"]["fix_sigma_to_mb"]):
+        results_fracs = []
+        with ProcessPoolExecutor(max_workers=cfg["max_workers"]) as executor:
+            for fit_config in fit_configs:
+                if "cent" in cut_set and fit_config["cent_min"] == 0 and fit_config["cent_max"] == 100:
+                    results_fracs.append((executor.submit(do_fit, fit_config, cfg), fit_config))
+        for result, fit_cfg_result in results_fracs:
+            res = result.result()
+            sig_fracs, bkg_fracs, _, _, _, _ = res["fracs"]
+            for fit_config in fit_configs:
+                if fit_config["pt_min"] == fit_cfg_result["pt_min"] and\
+                        fit_config["pt_max"] == fit_cfg_result["pt_max"] and\
+                            not (fit_config["cent_max"] == 100 and\
+                                fit_config["cent_min"] == 0) and\
+                                    bkg_cfg["templ_norm"]["fix_to_mb"][fit_config["i_pt"]]:
+                    fit_config["dplus_frac_factor"] = bkg_fracs[0] / sig_fracs[1]
+                if fit_config["pt_min"] == fit_cfg_result["pt_min"] and\
+                        fit_config["pt_max"] == fit_cfg_result["pt_max"] and\
+                            not (fit_config["cent_max"] == 100 and\
+                                fit_config["cent_min"] == 0) and\
+                                    cfg["fit_configs"]["signal"]["fix_sigma_to_mb"][fit_config["i_pt"]]:
+                    if fit_config["signal_func"][0] == 'doublegaus':
+                        fit_config["sigma1_fix_0"] = True
+                        fit_config["sigma1_init_0"] = res["sigma1"][0][0]
+                        fit_config["sigma1_min_0"] = res["sigma1"][0][0] - 0.001
+                        fit_config["sigma1_max_0"] = res["sigma1"][0][0] + 0.001
+                        fit_config["sigma2_fix_0"] = True
+                        fit_config["sigma2_init_0"] = res["sigma2"][0][0]
+                        fit_config["sigma2_min_0"] = res["sigma2"][0][0] - 0.001
+                        fit_config["sigma2_max_0"] = res["sigma2"][0][0] + 0.001
+                        fit_config["frac1_fix_0"] = True
+                        fit_config["frac1_init_0"] = res["frac1"][0][0]
+                        fit_config["frac1_min_0"] = res["frac1"][0][0] - 0.001
+                        fit_config["frac1_max_0"] = res["frac1"][0][0] + 0.001
+                    else:
+                        fit_config["sigma_fix_0"] = True
+                        fit_config["sigma_init_0"] = res["sigma"][0][0]
+                        fit_config["sigma_min_0"] = res["sigma"][0][0] - 0.001
+                        fit_config["sigma_max_0"] = res["sigma"][0][0] + 0.001
+                        fit_config["sigma_fix_1"] = True
+                    if fit_config["signal_func"][1] == 'doublegaus':
+                        fit_config["sigma1_fix_1"] = True
+                        fit_config["sigma1_init_1"] = res["sigma1"][1][0]
+                        fit_config["sigma1_min_1"] = res["sigma1"][1][0] - 0.001
+                        fit_config["sigma1_max_1"] = res["sigma1"][1][0] + 0.001
+                        fit_config["sigma2_fix_1"] = True
+                        fit_config["sigma2_init_1"] = res["sigma2"][1][0]
+                        fit_config["sigma2_min_1"] = res["sigma2"][1][0] - 0.001
+                        fit_config["sigma2_max_1"] = res["sigma2"][1][0] + 0.001
+                        fit_config["frac1_fix_1"] = True
+                        fit_config["frac1_init_1"] = res["frac1"][1][0]
+                        fit_config["frac1_min_1"] = res["frac1"][1][0] - 0.001
+                        fit_config["frac1_max_1"] = res["frac1"][1][0] + 0.001
+                    else:
+                        fit_config["sigma_fix_1"] = True
+                        fit_config["sigma_init_1"] = res["sigma"][1][0]
+                        fit_config["sigma_min_1"] = res["sigma"][1][0] - 0.001
+                        fit_config["sigma_max_1"] = res["sigma"][1][0] + 0.001
+
+    if bkg_cfg["templ_norm"]["fix_to_file_name"] is not None:
+        with uproot.open(bkg_cfg["templ_norm"]["fix_to_file_name"]) as f:
+            h_frac1 = f[bkg_cfg["templ_norm"]["hist_name"].format(
+                #pt_min=f"{fit_cfg_result['pt_min']*10:.0f}", pt_max=f"{fit_cfg_result['pt_max']*10:.0f}",
+                cent_min=0, cent_max=100 # TODO: generalise
+            )]
+            for fit_config in fit_configs:
+                fit_config["dplus_frac_factor"] = h_frac1.values()[fit_config["i_pt"]]
+
 
     results = []
     with ProcessPoolExecutor(max_workers=cfg["max_workers"]) as executor:
@@ -616,14 +1016,14 @@ def fit(config_file_name):
     output_df = pd.DataFrame(output_df)
     output_df.to_parquet(os.path.join(
         os.path.expanduser(cfg["outputs"]["directory"]),
-        "fit_results.parquet"
+        f'fit_results{cfg["outputs"]["suffix"]}.parquet'
     ), index=False)
 
     h_handler.set_histos(output_df)
 
     h_handler.dump_to_root(os.path.join(
         os.path.expanduser(cfg["outputs"]["directory"]),
-        "mass_fits.root"
+        f'mass_fits{cfg["outputs"]["suffix"]}.root'
     ))
 
 
