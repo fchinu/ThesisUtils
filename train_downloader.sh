@@ -3,7 +3,8 @@ TRAIN_RUN=XXXXXX
 INPUT="files_to_download.txt"
 IS_SLIM=true
 MAX_FILES_TO_DOWNLOAD=2
-START_FILE=0
+N_FILES_FOR_MERGE=30
+N_JOBS=10
 SUFFIX="LHCXXYY"
 SELECTIONS="a < X" # Can be null if no selection is needed
 TRAIN_FRACTION=1
@@ -42,7 +43,8 @@ jq -n --argjson train_run "$TRAIN_RUN" \
       --arg input "$INPUT" \
       --argjson is_slim "$IS_SLIM" \
       --argjson max_files_to_download "$MAX_FILES_TO_DOWNLOAD" \
-      --argjson start_file "$START_FILE" \
+      --argjson n_files_for_merge "$N_FILES_FOR_MERGE" \
+      --argjson n_jobs "$N_JOBS" \
       --arg suffix "$SUFFIX" \
       --arg selections "$SELECTIONS" \
       --argjson train_fraction "$TRAIN_FRACTION" \
@@ -55,7 +57,8 @@ jq -n --argjson train_run "$TRAIN_RUN" \
           input: $input,
           is_slim: $is_slim,
           max_files_to_download: $max_files_to_download,
-          start_file: $start_file,
+          n_files_for_merge: $n_files_for_merge,
+          n_jobs: $n_jobs,
           suffix: $suffix,
           selections: $selections,
           train_fraction: $train_fraction,
