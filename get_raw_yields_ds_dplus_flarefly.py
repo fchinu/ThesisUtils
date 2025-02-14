@@ -196,8 +196,9 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
             for obs in common_df_cols:
                 self._histos[f"{obs}_ds"][i_cent].SetBinContent(i_pt + 1, row[obs][0][0])
                 self._histos[f"{obs}_ds"][i_cent].SetBinError(i_pt + 1, row[obs][0][1])
-                self._histos[f"{obs}_dplus"][i_cent].SetBinContent(i_pt + 1, row[obs][1][0])
-                self._histos[f"{obs}_dplus"][i_cent].SetBinError(i_pt + 1, row[obs][1][1])
+                if len(row[obs]) > 1:
+                    self._histos[f"{obs}_dplus"][i_cent].SetBinContent(i_pt + 1, row[obs][1][0])
+                    self._histos[f"{obs}_dplus"][i_cent].SetBinError(i_pt + 1, row[obs][1][1])
             for obs in not_common_df_cols:
                 if not isinstance(row[obs], tuple):
                     self._histos[obs][i_cent].SetBinContent(i_pt + 1, row[obs])
@@ -210,40 +211,42 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
             self._histos["raw_yield_over_ev_ds"][i_cent].SetBinError(
                 i_pt + 1, row["raw_yields"][0][1] / self._n_ev
             )
-            self._histos["raw_yield_over_ev_dplus"][i_cent].SetBinContent(
-                i_pt + 1, row["raw_yields"][1][0] / self._n_ev
-            )
-            self._histos["raw_yield_over_ev_dplus"][i_cent].SetBinError(
-                i_pt + 1, row["raw_yields"][1][1] / self._n_ev
-            )
             self._histos["significance_over_sqrt_ev_ds"][i_cent].SetBinContent(
                 i_pt + 1, row["significance"][0][0] / np.sqrt(self._n_ev)
             )
             self._histos["significance_over_sqrt_ev_ds"][i_cent].SetBinError(
                 i_pt + 1, row["significance"][0][1] / np.sqrt(self._n_ev)
             )
-            self._histos["significance_over_sqrt_ev_dplus"][i_cent].SetBinContent(
-                i_pt + 1, row["significance"][1][0] / np.sqrt(self._n_ev)
-            )
-            self._histos["significance_over_sqrt_ev_dplus"][i_cent].SetBinError(
-                i_pt + 1, row["significance"][1][1] / np.sqrt(self._n_ev)
-            )
-            self._histos["s_over_b_ds"][i_cent].SetBinContent(
-                i_pt + 1, row["signal"][0][0] / row["background"][0][0]
-            )
-            self._histos["s_over_b_ds"][i_cent].SetBinError(
-                i_pt + 1, row["signal"][0][1] / row["background"][0][0]
-            )
-            self._histos["s_over_b_dplus"][i_cent].SetBinContent(
-                i_pt + 1, row["signal"][1][0] / row["background"][1][0]
-            )
-            self._histos["s_over_b_dplus"][i_cent].SetBinError(
-                i_pt + 1, row["signal"][1][1] / row["background"][1][0]
-            )
-            if "sigma" in row:
-                self._histos["sigma_ratio_second_first_peak"][i_cent].SetBinContent(
-                    i_pt + 1, row["sigma"][1][0] / row["sigma"][0][0]
+            if row["background"][0][0] != 0:
+                self._histos["s_over_b_ds"][i_cent].SetBinContent(
+                    i_pt + 1, row["signal"][0][0] / row["background"][0][0]
                 )
+                self._histos["s_over_b_ds"][i_cent].SetBinError(
+                    i_pt + 1, row["signal"][0][1] / row["background"][0][0]
+                )
+            if len(row["raw_yields"]) > 1:
+                self._histos["raw_yield_over_ev_dplus"][i_cent].SetBinContent(
+                    i_pt + 1, row["raw_yields"][1][0] / self._n_ev
+                )
+                self._histos["raw_yield_over_ev_dplus"][i_cent].SetBinError(
+                    i_pt + 1, row["raw_yields"][1][1] / self._n_ev
+                )
+                self._histos["significance_over_sqrt_ev_dplus"][i_cent].SetBinContent(
+                    i_pt + 1, row["significance"][1][0] / np.sqrt(self._n_ev)
+                )
+                self._histos["significance_over_sqrt_ev_dplus"][i_cent].SetBinError(
+                    i_pt + 1, row["significance"][1][1] / np.sqrt(self._n_ev)
+                )
+                self._histos["s_over_b_dplus"][i_cent].SetBinContent(
+                    i_pt + 1, row["signal"][1][0] / row["background"][1][0]
+                )
+                self._histos["s_over_b_dplus"][i_cent].SetBinError(
+                    i_pt + 1, row["signal"][1][1] / row["background"][1][0]
+                )
+                if "sigma" in row:
+                    self._histos["sigma_ratio_second_first_peak"][i_cent].SetBinContent(
+                        i_pt + 1, row["sigma"][1][0] / row["sigma"][0][0]
+                    )
 
     def dump_to_root(self, output_file):
         """
@@ -479,23 +482,23 @@ def get_sigma_from_cfg(cfg, fit_config, particle_name):
                     ]
                     return h_sigma.values()[fit_config["i_pt"]]
             if fit_config["signal_func"][idx_signal] == "doublegaus":
-                h_sigma1 = f[f'h_sigma1_{particle_name}_0_100']
-                h_sigma2 = f[f'h_sigma2_{particle_name}_0_100']
-                h_frac1 = f[f'h_frac1_{particle_name}_0_100']
+                h_sigma1 = f[f'h_sigma1_{particle_name}']
+                h_sigma2 = f[f'h_sigma2_{particle_name}']
+                h_frac1 = f[f'h_frac1_{particle_name}']
                 return (
                     h_sigma1.values()[fit_config["i_pt"]],
                     h_sigma2.values()[fit_config["i_pt"]],
                     h_frac1.values()[fit_config["i_pt"]]
                 )
             elif fit_config["signal_func"][idx_signal] == "gaussian":
-                h_sigma = f[f'h_sigma_{particle_name}_0_100']
+                h_sigma = f[f'h_sigma_{particle_name}']
                 return h_sigma.values()[fit_config["i_pt"]]
             elif fit_config["signal_func"][idx_signal] == "doublecb":
-                h_sigma = f[f'h_sigma_{particle_name}_0_100']
-                h_alphar = f[f'h_alphar_{particle_name}_0_100']
-                h_alphal = f[f'h_alphal_{particle_name}_0_100']
-                h_nl = f[f'h_nl_{particle_name}_0_100']
-                h_nr = f[f'h_nr_{particle_name}_0_100']
+                h_sigma = f[f'h_sigma_{particle_name}']
+                h_alphar = f[f'h_alphar_{particle_name}']
+                h_alphal = f[f'h_alphal_{particle_name}']
+                h_nl = f[f'h_nl_{particle_name}']
+                h_nr = f[f'h_nr_{particle_name}']
                 return (
                     h_sigma.values()[fit_config["i_pt"]],
                     h_alphar.values()[fit_config["i_pt"]],
@@ -504,9 +507,9 @@ def get_sigma_from_cfg(cfg, fit_config, particle_name):
                     h_nr.values()[fit_config["i_pt"]]
                 )
             elif fit_config["signal_func"][idx_signal] == "doublecbsymm":
-                h_sigma = f[f'h_sigma_{particle_name}_0_100']
-                h_alpha= f[f'h_alpha_{particle_name}_0_100']
-                h_n = f[f'h_n_{particle_name}_0_100']
+                h_sigma = f[f'h_sigma_{particle_name}']
+                h_alpha= f[f'h_alpha_{particle_name}']
+                h_n = f[f'h_n_{particle_name}']
                 return (
                     h_sigma.values()[fit_config["i_pt"]],
                     h_alpha.values()[fit_config["i_pt"]],
@@ -753,10 +756,11 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
 
     # signals initialisation
     fitter.set_particle_mass(0, pdg_id=431)
-    fitter.set_particle_mass(1, pdg_id=411)
-
     initialise_signal(fitter, fit_config, 0)
-    initialise_signal(fitter, fit_config, 1)
+
+    if len(fit_config["signal_func"]) > 1:
+        fitter.set_particle_mass(1, pdg_id=411)
+        initialise_signal(fitter, fit_config, 1)
 
     # bkg initialisation
     for i_func, bkg_func in enumerate(bkg_funcs):
@@ -845,8 +849,14 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
         plt.close(figres)
 
         fracs = fitter._F2MassFitter__get_all_fracs() # pylint: disable=protected-access
-        corr_bkg_frac = fracs[1][0]
-        corr_bkg_frac_err = fracs[4][0]
+        if len(fracs[1]) > 0:
+            corr_bkg_frac = fracs[1][0]
+            corr_bkg_frac_err = fracs[4][0]
+            corr_bkg_over_dplus_signal = (fracs[1][0] / fracs[0][1], fracs[1][0] / fracs[0][1] * np.sqrt((fracs[4][0] / fracs[1][0])**2 + (fracs[3][1] / fracs[0][1])**2))
+        else:
+            corr_bkg_frac = 0
+            corr_bkg_frac_err = 0
+            corr_bkg_over_dplus_signal = (0, 0)
         out_dict = {
             "raw_yields": [fitter.get_raw_yield(i) for i in range(n_signal)],
             "mean": [fitter.get_mass(i) for i in range(n_signal)],
@@ -857,7 +867,7 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
             "bkg_frac": (corr_bkg_frac, corr_bkg_frac_err),
             "fracs": fracs,
             "converged": fit_result.converged, 
-            "corr_bkg_over_dplus_signal": (fracs[1][0] / fracs[0][1], fracs[1][0] / fracs[0][1] * np.sqrt((fracs[4][0] / fracs[1][0])**2 + (fracs[3][1] / fracs[0][1])**2))
+            "corr_bkg_over_dplus_signal": corr_bkg_over_dplus_signal
         }
 
         if fit_config["signal_func"][0] == "doublegaus": #TODO: generalise in case different signal functions are used
