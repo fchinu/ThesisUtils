@@ -427,6 +427,10 @@ def get_sigma_from_cfg(cfg, fit_config, particle_name):
             fitter_mc.set_signal_initpar(0, "alphar", 1.5, limits=[1., 3.])
             fitter_mc.set_signal_initpar(0, "nl", 50, limits=[30., 100.])
             fitter_mc.set_signal_initpar(0, "nr", 50, limits=[30., 100.])
+        elif fit_config["signal_func"][idx_signal] == "doublecbsymm":
+            fitter_mc.set_signal_initpar(0, "sigma", 0.01, limits=[0.001, 0.050])
+            fitter_mc.set_signal_initpar(0, "alpha", 1.5, limits=[1., 3.])
+            fitter_mc.set_signal_initpar(0, "n", 50, limits=[30., 100.])
         else:
             Logger("Signal function not supported", "FATAL")
         fitter_mc.mass_zfit()
@@ -446,6 +450,12 @@ def get_sigma_from_cfg(cfg, fit_config, particle_name):
                 fitter_mc.get_signal_parameter(0, "alphal")[0],
                 fitter_mc.get_signal_parameter(0, "nl")[0],
                 fitter_mc.get_signal_parameter(0, "nr")[0]
+            )
+        elif fit_config["signal_func"][idx_signal] == "doublecbsymm":
+            return (
+                fitter_mc.get_signal_parameter(0, "sigma")[0],
+                fitter_mc.get_signal_parameter(0, "alpha")[0],
+                fitter_mc.get_signal_parameter(0, "n")[0]
             )
 
 
@@ -965,7 +975,12 @@ def fit(config_file_name):
                             not (fit_config["cent_max"] == 100 and\
                                 fit_config["cent_min"] == 0) and\
                                     cfg["fit_configs"]["signal"]["fix_sigma_to_mb"][fit_config["i_pt"]]:
-                    if fit_config["signal_func"][0] == 'doublegaus':
+                    if fit_config["signal_func"][0] == 'gaussian':
+                        fit_config["sigma_fix_0"] = True
+                        fit_config["sigma_init_0"] = res["sigma"][0][0]
+                        fit_config["sigma_min_0"] = res["sigma"][0][0] - 0.001
+                        fit_config["sigma_max_0"] = res["sigma"][0][0] + 0.001
+                    elif fit_config["signal_func"][0] == 'doublegaus':
                         fit_config["sigma1_fix_0"] = True
                         fit_config["sigma1_init_0"] = res["sigma1"][0][0]
                         fit_config["sigma1_min_0"] = res["sigma1"][0][0] - 0.001
@@ -978,13 +993,25 @@ def fit(config_file_name):
                         fit_config["frac1_init_0"] = res["frac1"][0][0]
                         fit_config["frac1_min_0"] = res["frac1"][0][0] - 0.001
                         fit_config["frac1_max_0"] = res["frac1"][0][0] + 0.001
-                    else:
+                    elif fit_config["signal_func"][0] == 'doublecbsymm':
                         fit_config["sigma_fix_0"] = True
                         fit_config["sigma_init_0"] = res["sigma"][0][0]
                         fit_config["sigma_min_0"] = res["sigma"][0][0] - 0.001
                         fit_config["sigma_max_0"] = res["sigma"][0][0] + 0.001
+                        fit_config["alpha_fix_0"] = True
+                        fit_config["alpha_init_0"] = res["alpha"][0][0]
+                        fit_config["alpha_min_0"] = res["alpha"][0][0] - 0.001
+                        fit_config["alpha_max_0"] = res["alpha"][0][0] + 0.001
+                        fit_config["n_fix_0"] = True
+                        fit_config["n_init_0"] = res["n"][0][0]
+                        fit_config["n_min_0"] = res["n"][0][0] - 0.001
+                        fit_config["n_max_0"] = res["n"][0][0] + 0.001
+                    if fit_config["signal_func"][1] == 'gaussian':    
                         fit_config["sigma_fix_1"] = True
-                    if fit_config["signal_func"][1] == 'doublegaus':
+                        fit_config["sigma_init_1"] = res["sigma"][1][0]
+                        fit_config["sigma_min_1"] = res["sigma"][1][0] - 0.001
+                        fit_config["sigma_max_1"] = res["sigma"][1][0] + 0.001
+                    elif fit_config["signal_func"][1] == 'doublegaus':
                         fit_config["sigma1_fix_1"] = True
                         fit_config["sigma1_init_1"] = res["sigma1"][1][0]
                         fit_config["sigma1_min_1"] = res["sigma1"][1][0] - 0.001
@@ -997,11 +1024,19 @@ def fit(config_file_name):
                         fit_config["frac1_init_1"] = res["frac1"][1][0]
                         fit_config["frac1_min_1"] = res["frac1"][1][0] - 0.001
                         fit_config["frac1_max_1"] = res["frac1"][1][0] + 0.001
-                    else:
+                    elif fit_config["signal_func"][1] == 'doublecbsymm':
                         fit_config["sigma_fix_1"] = True
                         fit_config["sigma_init_1"] = res["sigma"][1][0]
                         fit_config["sigma_min_1"] = res["sigma"][1][0] - 0.001
                         fit_config["sigma_max_1"] = res["sigma"][1][0] + 0.001
+                        fit_config["alpha_fix_1"] = True
+                        fit_config["alpha_init_1"] = res["alpha"][1][0]
+                        fit_config["alpha_min_1"] = res["alpha"][1][0] - 0.001
+                        fit_config["alpha_max_1"] = res["alpha"][1][0] + 0.001
+                        fit_config["n_fix_1"] = True
+                        fit_config["n_init_1"] = res["n"][1][0]
+                        fit_config["n_min_1"] = res["n"][1][0] - 0.001
+                        fit_config["n_max_1"] = res["n"][1][0] + 0.001
 
     if bkg_cfg["templ_norm"]["fix_to_file_name"] is not None:
         with uproot.open(bkg_cfg["templ_norm"]["fix_to_file_name"]) as f:
