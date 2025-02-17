@@ -573,6 +573,12 @@ def initialise_signal(fitter, fit_config, idx):
     - fit_config (dict): A dictionary containing the configuration for the signal functions and their parameters.
     - idx (int): The index of the signal function to be initialised.
     """
+    
+    fitter.set_signal_initpar(
+        idx, "mu", fit_config.get(f"mu_init_{idx}", 0.01),
+        limits=[fit_config.get(f"mu_min_{idx}", 0.001), fit_config.get(f"mu_max_{idx}", 0.03)],
+        fix=fit_config.get(f"mu_fix_{idx}", False)
+    )
     if fit_config["signal_func"][idx] == "gaussian":
         fitter.set_signal_initpar(
             idx, "sigma", fit_config.get(f"sigma_init_{idx}", 0.01),
