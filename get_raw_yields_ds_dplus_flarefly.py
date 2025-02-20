@@ -95,7 +95,7 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
             "#alpha_{r}", "n_{l}", "n_{r}", "#alpha", "n"
         ]
         self.obs_not_common = [
-            "chi2", "sigma_ratio_second_first_peak", "corr_bkg_over_dplus_signal", "bkg_frac"
+            "chi2", "sigma_ratio_second_first_peak", "corr_bkg_frac_over_dplus_0", "corr_bkg_frac_0"
         ]
         self.axes_titles_not_common = [
             "#chi^{2}/#it{ndf}", "Width second peak / width first peak",
@@ -191,8 +191,9 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
             if "alpha" in row:
                 common_df_cols.append("alpha")
                 common_df_cols.append("n")
-                
-            not_common_df_cols = ["chi2", "corr_bkg_over_dplus_signal", "bkg_frac"]
+
+            corr_bkg_cols = [col for col in list(df.columns) if "corr_bkg_frac" in col and "_cfg" not in col]
+            not_common_df_cols = ["chi2"] + corr_bkg_cols
             for obs in common_df_cols:
                 self._histos[f"{obs}_ds"][i_cent].SetBinContent(i_pt + 1, row[obs][0][0])
                 self._histos[f"{obs}_ds"][i_cent].SetBinError(i_pt + 1, row[obs][0][1])
@@ -200,7 +201,7 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
                     self._histos[f"{obs}_dplus"][i_cent].SetBinContent(i_pt + 1, row[obs][1][0])
                     self._histos[f"{obs}_dplus"][i_cent].SetBinError(i_pt + 1, row[obs][1][1])
             for obs in not_common_df_cols:
-                if not isinstance(row[obs], tuple):
+                if not isinstance(row[obs], (tuple, list)):
                     self._histos[obs][i_cent].SetBinContent(i_pt + 1, row[obs])
                 else:
                     self._histos[obs][i_cent].SetBinContent(i_pt + 1, row[obs][0])
@@ -573,12 +574,13 @@ def initialise_signal(fitter, fit_config, idx):
     - fit_config (dict): A dictionary containing the configuration for the signal functions and their parameters.
     - idx (int): The index of the signal function to be initialised.
     """
-    
-    fitter.set_signal_initpar(
-        idx, "mu", fit_config.get(f"mu_init_{idx}", 0.01),
-        limits=[fit_config.get(f"mu_min_{idx}", 0.001), fit_config.get(f"mu_max_{idx}", 0.03)],
-        fix=fit_config.get(f"mu_fix_{idx}", False)
-    )
+
+    if f"mu_init_{idx}" in fit_config:
+        fitter.set_signal_initpar(
+            idx, "mu", fit_config.get(f"mu_init_{idx}", 1.9),
+            limits=[fit_config.get(f"mu_min_{idx}", 0.), fit_config.get(f"mu_max_{idx}", 10.)],
+            fix=fit_config.get(f"mu_fix_{idx}", False)
+        )
     if fit_config["signal_func"][idx] == "gaussian":
         fitter.set_signal_initpar(
             idx, "sigma", fit_config.get(f"sigma_init_{idx}", 0.01),
@@ -701,21 +703,23 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
     label_signal_pdfs = [r"$\mathrm{D_{s}^{+}}$ signal", r"$\mathrm{D^{+}}$ signal"]
     label_bkg_pdfs = ["Combinatorial background"]
     if fit_config["use_bkg_templ"]:
-        bkg_funcs.insert(0, "hist")
-        label_bkg_pdfs.insert(
-            0,
-            r"$\mathrm{D^{+}}\rightarrow K^{-}\pi^{+}\pi^{+}$"
-            "\ncorrelated background"
-        )
+        bkg_cfg = cfg["fit_configs"]["bkg"]["templ_norm"]["backgrounds"]
+        data_corr_bkgs = []
+        for i_bkg, bkg in enumerate(bkg_cfg):
+            bkg_funcs.insert(i_bkg, "hist")
+            label_bkg_pdfs.insert(
+                i_bkg,
+                bkg["name"] + "\ncorrelated background"
+            )
+            data_corr_bkgs.append(DataHandler(
+                data=bkg["template_file"],
+                histoname=bkg["template_hist_name"].format(
+                    pt_min=f"{pt_min*10:.0f}", pt_max=f"{pt_max*10:.0f}",
+                    cent_min=cent_min, cent_max=cent_max
+                ),
+                limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
+            ))
 
-        data_corr_bkg = DataHandler(
-            data=cfg["fit_configs"]["bkg"]["template_file"],
-            histoname=cfg["fit_configs"]["bkg"]["hist_name"].format(
-                pt_min=f"{pt_min*10:.0f}", pt_max=f"{pt_max*10:.0f}",
-                cent_min=cent_min, cent_max=cent_max
-            ),
-            limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
-        )
         fitter = F2MassFitter(
             data_hdl, name_signal_pdf=fit_config["signal_func"],
             name_background_pdf=bkg_funcs,
@@ -724,42 +728,45 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
             label_bkg_pdf=label_bkg_pdfs,
             verbosity=1, tol=1.e-1
         )
-        fitter.set_background_template(0, data_corr_bkg)
-        fitter.set_background_initpar(0, "frac", 0.01, limits=[0., 1.])
+
         templ_norm_cfg = cfg["fit_configs"]["bkg"]["templ_norm"]
         if templ_norm_cfg["fix_with_br"][fit_config['i_pt']]:
-            data_corr_bkg_reference = DataHandler(
-                data=templ_norm_cfg["reference_file_bkg"],
-                histoname=templ_norm_cfg["reference_hist_name"].format(
-                    pt_min=f"{pt_min*10:.0f}", pt_max=f"{pt_max*10:.0f}",
-                    cent_min=cent_min, cent_max=cent_max
-                ),
-                limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
-            )
             data_signal_reference = DataHandler(
-                data=templ_norm_cfg["reference_file_signal"],
-                histoname=templ_norm_cfg["reference_hist_name"].format(
+                data=templ_norm_cfg["signal"]["file_norm"],
+                histoname=templ_norm_cfg["signal"]["hist_name"].format(
                     pt_min=f"{pt_min*10:.0f}", pt_max=f"{pt_max*10:.0f}",
                     cent_min=cent_min, cent_max=cent_max
                 ),
                 limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
             )
-            fitter.fix_bkg_frac_to_signal_pdf(
-                0, 1, # correlated bkg to D+ signal
-                data_corr_bkg_reference.get_norm() * templ_norm_cfg["br_dplus_to_pikpi"]["pdg"] / (
-                    templ_norm_cfg["br_dplus_to_pikpi"]["simulations"] +\
-                        templ_norm_cfg["br_dplus_to_k0*pi"]["simulations"]
-                ) / (
-                    data_signal_reference.get_norm() *\
-                        templ_norm_cfg["br_dplus_to_phipi"]["pdg"] /\
-                            templ_norm_cfg["br_dplus_to_phipi"]["simulations"]
+
+        for i_func, data_corr_bkg in enumerate(data_corr_bkgs):
+            fitter.set_background_template(i_func, data_corr_bkg)
+            fitter.set_background_initpar(i_func, "frac", 0.01, limits=[0., 1.])
+            if templ_norm_cfg["fix_with_br"][fit_config['i_pt']]:
+                data_corr_bkg_reference = DataHandler(
+                    data=bkg_cfg[i_func]["file_norm"],
+                    histoname=bkg_cfg[i_func]["norm_hist_name"].format(
+                        pt_min=f"{pt_min*10:.0f}", pt_max=f"{pt_max*10:.0f}",
+                        cent_min=cent_min, cent_max=cent_max
+                    ),
+                    limits=[fit_config["mass_min"], fit_config["mass_max"]], rebin=fit_config["rebin"]
                 )
-            )
-        elif "dplus_frac_factor" in fit_config:
-            fitter.fix_bkg_frac_to_signal_pdf(
-                0, 1, # correlated bkg to D+ signal
-                fit_config["dplus_frac_factor"]
-            )
+                fitter.fix_bkg_frac_to_signal_pdf(
+                    i_func, 1, # correlated bkg to D+ signal
+                    data_corr_bkg_reference.get_norm() *\
+                        bkg_cfg[i_func]["br"]["pdg"] / bkg_cfg[i_func]["br"]["simulations"]
+                    / (
+                        data_signal_reference.get_norm() *\
+                            templ_norm_cfg["signal"]["br"]["pdg"] /\
+                                templ_norm_cfg["signal"]["br"]["simulations"]
+                    )
+                )
+            elif f"corr_bkg_frac_{i_func}_cfg" in fit_config:
+                fitter.fix_bkg_frac_to_signal_pdf(
+                    i_func, 1, # correlated bkg to D+ signal
+                    fit_config[f"corr_bkg_frac_{i_func}_cfg"]
+                )
     else:
         fitter = F2MassFitter(
             data_hdl, name_signal_pdf=fit_config["signal_func"],
@@ -865,14 +872,15 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
         plt.close(figres)
 
         fracs = fitter._F2MassFitter__get_all_fracs() # pylint: disable=protected-access
+        corr_bkg_frac_dict = {}
+        corr_bkg_frac_over_dplus_dict = {}
         if len(fracs[1]) > 0:
-            corr_bkg_frac = fracs[1][0]
-            corr_bkg_frac_err = fracs[4][0]
-            corr_bkg_over_dplus_signal = (fracs[1][0] / fracs[0][1], fracs[1][0] / fracs[0][1] * np.sqrt((fracs[4][0] / fracs[1][0])**2 + (fracs[3][1] / fracs[0][1])**2))
+            for i_corr_bkg, (corr_bkg_frac, corr_bkg_err) in enumerate(zip(fracs[1][:-1], fracs[4][:-1])):
+                corr_bkg_frac_dict[f"corr_bkg_frac_{i_corr_bkg}"] = [corr_bkg_frac, corr_bkg_err]
+                corr_bkg_frac_over_dplus_dict[f"corr_bkg_frac_over_dplus_{i_corr_bkg}"] = [corr_bkg_frac / fracs[0][1], corr_bkg_frac / fracs[0][1] * np.sqrt((corr_bkg_err / corr_bkg_frac)**2 + (fracs[3][1] / fracs[0][1])**2)]
         else:
-            corr_bkg_frac = 0
-            corr_bkg_frac_err = 0
-            corr_bkg_over_dplus_signal = (0, 0)
+            corr_bkg_frac_dict["corr_bkg_frac_0"] = [0, 0]
+            corr_bkg_frac_over_dplus_dict["corr_bkg_frac_over_dplus_0"] = [0, 0]
         out_dict = {
             "raw_yields": [fitter.get_raw_yield(i) for i in range(n_signal)],
             "mean": [fitter.get_mass(i) for i in range(n_signal)],
@@ -880,10 +888,10 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
             "significance": [fitter.get_significance(i, min=1.8, max=2.2) for i in range(n_signal)],
             "signal": [fitter.get_signal(i, min=1.8, max=2.) for i in range(n_signal)],
             "background": [fitter.get_background(i, min=1.8, max=2.) for i in range(n_signal)],
-            "bkg_frac": (corr_bkg_frac, corr_bkg_frac_err),
+            **corr_bkg_frac_dict,
             "fracs": fracs,
             "converged": fit_result.converged, 
-            "corr_bkg_over_dplus_signal": corr_bkg_over_dplus_signal
+            **corr_bkg_frac_over_dplus_dict
         }
 
         if fit_config["signal_func"][0] == "doublegaus": #TODO: generalise in case different signal functions are used
@@ -975,7 +983,8 @@ def fit(config_file_name):
                             not (fit_config["cent_max"] == 100 and\
                                 fit_config["cent_min"] == 0) and\
                                     bkg_cfg["templ_norm"]["fix_to_mb"][fit_config["i_pt"]]:
-                    fit_config["dplus_frac_factor"] = bkg_fracs[0] / sig_fracs[1]
+                    for i_corr_bkg, corr_bkg_frac in enumerate(bkg_fracs[:-1]):
+                        fit_config[f"corr_bkg_frac_{i_corr_bkg}_cfg"] = corr_bkg_frac / sig_fracs[1]
                 if fit_config["pt_min"] == fit_cfg_result["pt_min"] and\
                         fit_config["pt_max"] == fit_cfg_result["pt_max"] and\
                             not (fit_config["cent_max"] == 100 and\

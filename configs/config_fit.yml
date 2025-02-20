@@ -1,35 +1,102 @@
 inputs:
-  data: Projections_RawYields/Data/LHC22o_pass7/VsMult/Projections_Data.root
+  data: /home/fchinu/Run3/Ds_pp_13TeV/Projections_RawYields/data/VsMult/FT0M/data_LHC23_full.root
   mc: 
     ds: Projections_RawYields/Data/LHC22o_pass7/VsMult/Projections_MC.root
     dplus: Projections_RawYields/Data/LHC22o_pass7/VsMult/Projections_MC.root
   cutset: Projections_RawYields/configs/cutset_pp13TeV_multiplicity.yml
 
-max_workers: 30
+max_workers: 10
+
+zfit_cpus:
+  intra: 20
+  inter: 20
 
 fit_configs:
   # below one per pT bin
   mass:
-    mins: [1.75, 1.75, 1.75, 1.75, 1.75, 1.75]
-    maxs: [2.1, 2.1, 2.1, 2.1, 2.1, 2.1]
-  rebin: [2, 2, 2, 2, 2, 2]
+    mins: [1.75, 1.75, 1.75, 1.73, 1.73, 1.73]
+    maxs: [2.1, 2.1, 2.1, 2.15, 2.15, 2.15]
+  rebin: [2, 2, 2, 2, 4, 4]
   signal:
-    signal_funcs: [["gaussian", "gaussian"], ["gaussian", "gaussian"], ["gaussian", "gaussian"],
-      ["gaussian", "gaussian"], ["gaussian", "gaussian"], ["gaussian", "gaussian"]]
+    signal_funcs: [["doublecbsymm", "doublecbsymm"], ["doublecbsymm", "doublecbsymm"], ["doublecbsymm", "doublecbsymm"],
+      ["doublecbsymm", "doublecbsymm"], ["doublecbsymm", "doublecbsymm"], ["doublecbsymm", "doublecbsymm"]]
+    par_init_limit:
+      - sigma:
+          init: [0.01, 0.01, 0.01, 0.02, 0.02, 0.02]
+          min: [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+          max: [0.013, 0.013, 0.02, 0.03, 0.04, 0.04]
+          fix: [false, false, false, false, false, false]
+        alpha:
+          init: [1.5, 1.5, 1.5, 1.5, 1.5, 1.5]
+          min: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+          max: [5., 5., 5., 5., 5., 5.]
+          fix: [false, false, false, false, false, false]
+        n:
+          init: [50, 50, 50, 50, 50, 50]
+          min: [20, 20, 20, 20, 20, 20]
+          max: [100., 100., 100., 100., 100., 100.]
+          fix: [false, false, false, false, false, false]
+      - sigma:
+          init: [0.01, 0.01, 0.01, 0.02, 0.02, 0.024]
+          min: [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+          max: [0.013, 0.013, 0.02, 0.03, 0.04, 0.04]
+          fix: [false, false, false, false, false, false]
+        alpha:
+          init: [1.5, 1.5, 1.5, 1.5, 1.5, 1.5]
+          min: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+          max: [5., 5., 5., 5., 5., 5.]
+          fix: [false, false, false, false, false, false]
+        n:
+          init: [50, 50, 50, 50, 50, 50]
+          min: [20, 20, 20, 20, 20, 20]
+          max: [100., 100., 100., 100., 100., 100.]
+          fix: [false, false, false, false, false, false]
+
+    fix_sigma_to_mb: [true, true, true, true, true, true]
     fix_ds_sigma: [false, false, false, false, false, false]
     ds_sigma: # value, list or path to root_file. If null or empty, fit MC and then use that sigma
     fix_dplus_sigma: [false, false, false, false, false, false]
     dplus_sigma: [] # value, list or path to root_file. If null or empty, fit MC and then use that sigma
-    fix_sigma_dplus_to_ds: [false, false, false, true, true, true]
-    ratio_sigma_dplus_to_ds: [0, 0, 0, 0.8, 0.8, 0.8] # value, list or path to root_file. If null or empty, set dplus sigma to that of ds. Otherwise, set to ds sigma * value
+    fix_sigma_dplus_to_ds: [false, false, false, false, false, false]
+    ratio_sigma_dplus_to_ds: [0, 0, 0, 0., 0.8, 0.8] # value, list or path to root_file. If null or empty, set dplus sigma to that of ds. Otherwise, set to ds sigma * value
   bkg:
-    bkg_funcs: [['chebpol2'], ['chebpol2'], ['chebpol2'], ['chebpol2'], ['chebpol2'], ['chebpol2']]
+    bkg_funcs: [['chebpol2'], ['expo'], ['chebpol2'], ['chebpol2'], ['chebpol2'], ['chebpol2']]
     use_bkg_templ: [true, true, true, true, true, true]
-    template_file: Projections_RawYields/Data/LHC22o_pass7/VsMult/DplusForTemplateHistos_Train165702.root
+    templ_norm:
+      fix_to_mb: [true, true, true, true, true, true]
+      fix_to_file_name: null # set to null if no file is needed
+      hist_name: h_corr_bkg_over_dplus_signal_0_100  # can use also pt_min, pt_max, cent_min, cent_max to format name. pt variables are multiplied by 10 to avoid floating point issues
+      fix_with_br: [false, false, false, false, false, false]
+      backgrounds:
+      - name: $\mathrm{D^{+}}\rightarrow K^{-}\pi^{+}\pi^{+}$
+        file_norm: /home/fchinu/Run3/Ds_pp_13TeV/Projections_RawYields/MC/VsMult/LHC24g5_lc/w_bdt/dplus_bkg.root # with BDT selections (for normalisation)
+        norm_hist_name: 'h_mass_{pt_min}_{pt_max}'
+        template_file: /home/fchinu/Run3/Ds_pp_13TeV/Projections_RawYields/MC/VsMult/LHC24g5_lc/no_bdt/d_plus_corr_bkg_template.root
+        template_hist_name: 'h_mass_{pt_min}_{pt_max}' # can use also pt_min, pt_max, cent_min, cent_max to format name. pt variables are multiplied by 10 to avoid floating point issues
+        br:
+          pdg: 0.0938 # K pi pi
+          simulations: 0.4853 # 0.4263 + 0.059 (K pi pi + K0* pi)
+      # - name: $\mathrm{\Lambda_{c}^{+}}\rightarrow pK^{-}\pi^{+}$
+      #   file_norm: /home/fchinu/Run3/Ds_pp_13TeV/Projections_RawYields/MC/VsMult/LHC24g5_lc/w_bdt/lc.root # with BDT selections (for normalisation)
+      #   norm_hist_name: 'h_mass_{pt_min}_{pt_max}'
+      #   template_file: /home/fchinu/Run3/Ds_pp_13TeV/Projections_RawYields/MC/VsMult/LHC24g5_lc/no_bdt/lc_corr_bkg_template.root
+      #   template_hist_name: 'h_mass_{pt_min}_{pt_max}' # can use also pt_min, pt_max, cent_min, cent_max to format name. pt variables are multiplied by 10 to avoid floating point issues
+      #   br:
+      #     pdg: 0.0624 # p K pi
+      #     simulations: 0.3388
+      signal:
+        file_norm: /home/fchinu/Run3/Ds_pp_13TeV/Projections_RawYields/MC/VsMult/LHC24g5/dplus_w_bdt.root # str or list of str
+        hist_name: 'h_mass_{pt_min}_{pt_max}_cent_0_100' # can use also pt_min, pt_max, cent_min, cent_max to format name. pt variables are multiplied by 10 to avoid floating point issues
+
+        br:
+          pdg: 0.00269
+          simulations: 0.0752
+        
+    
 
 
 outputs:
-  directory: "Projections_RawYields/Data/LHC22o_pass7/VsMult"
+  directory: "Projections_RawYields/data/VsMult/FT0M/2023_test"
   suffix: ""
   save_all_fits: true
-  formats: ["png"]
+  formats: ["png", "pdf"]
