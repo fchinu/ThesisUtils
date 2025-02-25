@@ -16,6 +16,7 @@ import pandas as pd  # noqa: E402
 import uproot  # noqa: E402
 import yaml  # noqa: E402
 import ROOT  # noqa: E402
+import tensorflow as tf
 import zfit
 from flarefly.data_handler import DataHandler  # noqa: E402
 from flarefly.fitter import F2MassFitter  # noqa: E402
@@ -238,12 +239,12 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
                 self._histos["significance_over_sqrt_ev_dplus"][i_cent].SetBinError(
                     i_pt + 1, row["significance"][1][1] / np.sqrt(self._n_ev)
                 )
-                self._histos["s_over_b_dplus"][i_cent].SetBinContent(
-                    i_pt + 1, row["signal"][1][0] / row["background"][1][0]
-                )
-                self._histos["s_over_b_dplus"][i_cent].SetBinError(
-                    i_pt + 1, row["signal"][1][1] / row["background"][1][0]
-                )
+                # self._histos["s_over_b_dplus"][i_cent].SetBinContent(
+                #     i_pt + 1, row["signal"][1][0] / row["background"][1][0]
+                # )
+                # self._histos["s_over_b_dplus"][i_cent].SetBinError(
+                #     i_pt + 1, row["signal"][1][1] / row["background"][1][0]
+                # )
                 if "sigma" in row:
                     self._histos["sigma_ratio_second_first_peak"][i_cent].SetBinContent(
                         i_pt + 1, row["sigma"][1][0] / row["sigma"][0][0]
@@ -412,7 +413,7 @@ def get_sigma_from_cfg(cfg, fit_config, particle_name):
         fitter_mc = F2MassFitter(
             data_hdl_mc, name_signal_pdf=fit_config["signal_func"][idx_signal],
             name_background_pdf="nobkg",
-            name=f"{particle_name}_pt{pt_suffix}", chi2_loss=True,
+            name=f"{particle_name}_pt{pt_suffix}_for_sigma", chi2_loss=True,
             verbosity=1, tol=1.e-1
         )
         fitter_mc.set_particle_mass(0, pdg_id=431 if particle_name == "ds" else 411)
@@ -681,11 +682,13 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
     """Fit the invariant mass spectrum for a given configuration."""
     pt_min = fit_config["pt_min"]
     pt_max = fit_config["pt_max"]
+    pt_cent_suffix = f"{pt_min*10:.0f}_{pt_max*10:.0f}"
 
     cent_min, cent_max = None, None
     if "cent_min" in fit_config and "cent_max" in fit_config:
         cent_min = fit_config["cent_min"]
         cent_max = fit_config["cent_max"]
+        pt_cent_suffix += f"_cent_{cent_min:.0f}_{cent_max:.0f}"
 
         data_hdl = DataHandler(
             data=cfg["inputs"]["data"],
@@ -723,7 +726,7 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
         fitter = F2MassFitter(
             data_hdl, name_signal_pdf=fit_config["signal_func"],
             name_background_pdf=bkg_funcs,
-            name=f"ds_pt{pt_min*10:.0f}_{pt_max*10:.0f}", chi2_loss=True,
+            name=f"ds_pt_{pt_cent_suffix}", chi2_loss=True,
             label_signal_pdf=label_signal_pdfs,
             label_bkg_pdf=label_bkg_pdfs,
             verbosity=1, tol=1.e-1
@@ -771,7 +774,7 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
         fitter = F2MassFitter(
             data_hdl, name_signal_pdf=fit_config["signal_func"],
             name_background_pdf=fit_config["bkg_func"],
-            name=f"ds_pt{pt_min*10:.0f}_{pt_max*10:.0f}", chi2_loss=True,
+            name=f"ds_pt_{pt_cent_suffix}", chi2_loss=True,
             label_signal_pdf=label_signal_pdfs,
             label_bkg_pdf=label_bkg_pdfs,
             verbosity=1, tol=1.e-1
