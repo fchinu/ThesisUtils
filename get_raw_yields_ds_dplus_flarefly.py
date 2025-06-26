@@ -239,12 +239,12 @@ class HistHandler:  # pylint: disable=too-many-instance-attributes
                 self._histos["significance_over_sqrt_ev_dplus"][i_cent].SetBinError(
                     i_pt + 1, row["significance"][1][1] / np.sqrt(self._n_ev)
                 )
-                # self._histos["s_over_b_dplus"][i_cent].SetBinContent(
-                #     i_pt + 1, row["signal"][1][0] / row["background"][1][0]
-                # )
-                # self._histos["s_over_b_dplus"][i_cent].SetBinError(
-                #     i_pt + 1, row["signal"][1][1] / row["background"][1][0]
-                # )
+                self._histos["s_over_b_dplus"][i_cent].SetBinContent(
+                    i_pt + 1, row["signal"][1][0] / row["background"][1][0]
+                )
+                self._histos["s_over_b_dplus"][i_cent].SetBinError(
+                    i_pt + 1, row["signal"][1][1] / row["background"][1][0]
+                )
                 if "sigma" in row:
                     self._histos["sigma_ratio_second_first_peak"][i_cent].SetBinContent(
                         i_pt + 1, row["sigma"][1][0] / row["sigma"][0][0]
@@ -765,10 +765,10 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
                                 templ_norm_cfg["signal"]["br"]["simulations"]
                     )
                 )
-            elif f"corr_bkg_frac_{i_func}_cfg" in fit_config:
+            elif f"corr_bkg_frac_over_dplus_{i_func}_cfg" in fit_config:
                 fitter.fix_bkg_frac_to_signal_pdf(
                     i_func, 1, # correlated bkg to D+ signal
-                    fit_config[f"corr_bkg_frac_{i_func}_cfg"]
+                    fit_config[f"corr_bkg_frac_over_dplus_{i_func}_cfg"]
                 )
     else:
         fitter = F2MassFitter(
@@ -864,15 +864,16 @@ def do_fit(fit_config, cfg):  # pylint: disable=too-many-locals, too-many-branch
             else:
                 suffix = f"_{pt_min * 10:.0f}_{pt_max * 10:.0f}_"
             suffix += cfg["outputs"]["suffix"]
-            fig.savefig(f"{output_dir}/ds_mass_pt{suffix}.{frmt}")
-            figres.savefig(f"{output_dir}/ds_massres_pt{suffix}.{frmt}")
             if frmt == "root":
                 fitter.dump_to_root(
                     f"{output_dir}/fits_{cfg['outputs']['suffix']}.{frmt}", 
                     option="update", suffix=suffix, num=5000
                 )
-        plt.close(fig)
-        plt.close(figres)
+            else:
+                fig.savefig(f"{output_dir}/ds_mass_pt{suffix}.{frmt}")
+                figres.savefig(f"{output_dir}/ds_massres_pt{suffix}.{frmt}")
+                plt.close(fig)
+                plt.close(figres)
 
         fracs = fitter._F2MassFitter__get_all_fracs() # pylint: disable=protected-access
         corr_bkg_frac_dict = {}
@@ -969,6 +970,14 @@ def fit(config_file_name):
 
     fit_configs = create_fit_configs(cfg, cut_set)
 
+    # recreate root file if needed
+    if "root" in cfg["outputs"]["formats"]:
+        output_dir = os.path.join(
+            os.path.expanduser(cfg["outputs"]["directory"]),
+            "fits"
+        )
+        uproot.recreate(f"{output_dir}/fits_{cfg['outputs']['suffix']}.root")
+
     bkg_cfg = cfg["fit_configs"]["bkg"]
     if (any(bkg_cfg["use_bkg_templ"]) and any(bkg_cfg["templ_norm"]["fix_to_mb"])) or\
             any(cfg["fit_configs"]["signal"]["fix_sigma_to_mb"]):
@@ -987,7 +996,7 @@ def fit(config_file_name):
                                 fit_config["cent_min"] == 0) and\
                                     bkg_cfg["templ_norm"]["fix_to_mb"][fit_config["i_pt"]]:
                     for i_corr_bkg, corr_bkg_frac in enumerate(bkg_fracs[:-1]):
-                        fit_config[f"corr_bkg_frac_{i_corr_bkg}_cfg"] = corr_bkg_frac / sig_fracs[1]
+                        fit_config[f"corr_bkg_frac_over_dplus_{i_corr_bkg}_cfg"] = corr_bkg_frac / sig_fracs[1]
                 if fit_config["pt_min"] == fit_cfg_result["pt_min"] and\
                         fit_config["pt_max"] == fit_cfg_result["pt_max"] and\
                             not (fit_config["cent_max"] == 100 and\
@@ -1063,7 +1072,7 @@ def fit(config_file_name):
                 cent_min=0, cent_max=100 # TODO: generalise
             )]
             for fit_config in fit_configs:
-                fit_config["dplus_frac_factor"] = h_frac1.values()[fit_config["i_pt"]]
+                fit_config["corr_bkg_frac_over_dplus_0"] = h_frac1.values()[fit_config["i_pt"]]
 
 
     results = []
