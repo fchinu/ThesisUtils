@@ -24,16 +24,25 @@ def load_sparse_from_task(config_input):
     Returns:
     - sparses (list=: A list of THnSparse objects loaded from the ROOT file.
     """
+    input_files_names = config_input["names"]
+    if not isinstance(input_files_names, list):
+        input_files_names = [input_files_names]
     sparse_names = config_input["sparses"]
     if not isinstance(sparse_names, list):
         sparse_names = [sparse_names]
-    input_files_names = config_input["names"]
-    if not isinstance(input_files_names, list):
-        input_files_names = [input_files_names] * len(sparse_names)
+    if len(sparse_names) != len(input_files_names):
+        if len(sparse_names) == 1:
+            sparse_names = sparse_names * len(input_files_names)
+        elif len(input_files_names) == 1:
+            input_files_names = input_files_names * len(sparse_names)
+        else:
+            raise ValueError("Number of input files and sparse names do not match.")
+    
     sparses = []
     for input_file_name, sparse_name in zip(input_files_names, sparse_names):
         with ROOT.TFile.Open(input_file_name, "READ") as input_file:
             sparses.append(input_file.Get(sparse_name))
+            print(input_file_name, sparses[-1])
 
     return sparses
 
@@ -48,11 +57,20 @@ def load_event_histogram_from_task(config_input):
     Returns:
     - h_ev (TH1F): Event histogram loaded from the ROOT file.
     """
-    with ROOT.TFile.Open(config_input["names"], "READ") as input_file:
-        h_ev = input_file.Get(config_input["event_histogram"])
-        h_ev.SetDirectory(0)
-    input_file.Close()
-    return h_ev
+    input_files_names = config_input["names"]
+    if not isinstance(input_files_names, list):
+        input_files_names = [input_files_names]
+    sparse_names = config_input["sparses"]
+    if not isinstance(sparse_names, list):
+        sparse_names = [sparse_names]
+    h_evs = []
+    for i_file, file_name in enumerate(input_files_names):
+        with ROOT.TFile.Open(file_name, "READ") as input_file:
+            h_evs.append(input_file.Get(config_input["event_histogram"]))
+            h_evs[-1].SetDirectory(0)
+    if len(input_files_names) == 1 and len(sparse_names) > 1:
+        h_evs = h_evs * len(sparse_names)
+    return h_evs
 
 
 def get_cuts(cuts_config):
@@ -162,20 +180,21 @@ def project_sparse(config_file_name):  # pylint: disable=too-many-locals
         cuts_config = yaml.load(cuts_config_file, yaml.FullLoader)
 
     sparses = load_sparse_from_task(config["inputs"])
-    h_ev = load_event_histogram_from_task(config["inputs"])
+    h_evs = load_event_histogram_from_task(config["inputs"])
 
     cuts = get_cuts(cuts_config)
     output_labels = config["output"]["file_names"]
     if not isinstance(output_labels, list):
         output_labels = [output_labels]
 
-    for sparse, output_label in zip(sparses, output_labels):
+    for sparse, h_ev, output_label in zip(sparses, h_evs, output_labels):
         results = []
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=min(len(cuts), 64)) as executor:
             for cut in cuts:
                 results.append(executor.submit(project_sparse_worker, sparse, cut))
-
         out_file_name = os.path.join(config["output"]["directory"], output_label)
+        if not os.path.exists(config["output"]["directory"]):
+            os.makedirs(config["output"]["directory"])
         with ROOT.TFile(out_file_name, "RECREATE") as _:
             for result in results:
                 h_mass, h_pt = result.result()
